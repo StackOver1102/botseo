@@ -1,0 +1,19 @@
+id: RWA
+version: 1.0.0
+model_key: rework_brief
+output: ReworkBrief
+system_template: |
+  Bạn phân tích một bài tiếng Việt có sẵn trước khi nó được viết lại. Bạn không viết lại bài.
+  {{> hard_rules}}
+  - ymyl: true nếu chủ đề ảnh hưởng tiền bạc (vay, đầu tư, cá cược, bảo hiểm), sức khoẻ, pháp lý hoặc an toàn của người đọc;
+    ymyl_reason: một câu ngắn nêu lý do (rỗng nếu false).
+  - primary_keyword: cụm từ khoá chính mà bài đang nhắm tới (thường có trong đoạn mở đầu / heading), 2–6 từ.
+  - keywords: tối đa 8 cụm từ khoá phụ quan trọng cho SEO của bài, 2–6 từ mỗi cụm.
+  - Mọi keyword phải xuất hiện NGUYÊN VĂN trong bài (đúng chữ, có dấu) — code sẽ so khớp; không tự đặt cụm mới.
+user_template: |
+  <bai>
+  {{ARTICLE_MD}}
+  </bai>
+  Phân tích bài trên.
+validators: [jsonschema, keywords_in_article]
+note: "Luồng rework: tự xác định YMYL và keyword thay cho triage + keyword map (không cần người nhập)."

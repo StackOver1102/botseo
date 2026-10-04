@@ -1,0 +1,24 @@
+id: P5
+version: 5.0.0
+model_key: knowledge_select
+output: KnowledgeSelection
+pre: knowledge_retrieve   # code lấy top-k ứng viên cho mỗi IG, xem §5.12
+system_template: |
+  Bạn chọn dữ liệu có sẵn trong kho của tác giả để làm information gain cho bài. Bạn không viết nội dung mới.
+  {{> hard_rules}}
+  - Chỉ chọn trong <ung_vien_kho>. Mỗi lựa chọn phải có entry_id có thật và excerpt là chuỗi con nguyên văn của content của mục đó — code sẽ so khớp.
+  - Tuyệt đối không tự viết, suy diễn hay "làm đẹp" trải nghiệm: trải nghiệm không có trong kho thì coi như không có.
+  - Chọn mục khớp đúng ý của IG (cùng chủ đề, cùng đối tượng, còn hiệu lực theo valid_until). Khớp một phần thì ghi rõ trong fit_reason và để confidence thấp.
+  - Mỗi IG tối đa 2 mục; một mục không dùng cho 2 IG khác nhau.
+  - IG không có mục phù hợp thì đưa ig_id vào unfilled_ig_ids.
+  Ví dụ: IG "chi phí thực tế khi đổi gói cước" + mục K0042 "Tháng 3/2026 mình chuyển từ gói 120k sang 90k…" → chọn K0042, excerpt là câu chứa số liệu, confidence cao.
+user_template: |
+  <gap_ig_plan>{{GAP_IG_JSON}}</gap_ig_plan>
+  <ung_vien_kho>{{KNOWLEDGE_CANDIDATES_JSON}}</ung_vien_kho>
+  <gioi_han>{{MAX_ENTRIES}}</gioi_han>
+  Lập KnowledgeSelection với tối đa {{MAX_ENTRIES}} mục, ưu tiên IG có owner = KHO_TAC_GIA.
+validators: [jsonschema, entry_ids_exist, excerpt_is_substring, one_entry_per_ig, max_entries, entry_not_expired]
+post: |
+  Code dựng AuthorEvidence từ các lựa chọn và thêm facts của mục vào FactInventory (origin = kho_tac_gia, DA_DUYET).
+  IG owner = KHO_TAC_GIA nằm trong unfilled_ig_ids: code bỏ IG đó; nếu số IG còn lại < ig_min thì quay về GAP_IG_AI
+  với revise_instructions "IG <id> không có dữ liệu trong kho, thay bằng IG owner = AI" (tính vào lượt revise của OUTLINE_GATE).

@@ -1,0 +1,28 @@
+# Thông tin job. Các file khác trong thư mục:
+#   article.md       bài hiện tại của site (nhánh A) — bắt buộc với nhánh A
+#   source.md        bài bên thứ ba (nhánh B) — text này bị xoá khỏi DB sau FACT_GATE
+#   voice_samples.md 2–3 bài của chính tác giả (nhánh B, mode standard/heavy)
+#   keywords.csv     cột: keyword,volume
+#   serp.csv         cột: rank,url,title,snippet (top 10 Google). Tuỳ chọn: không có thì gọi Serper (SERPER_API_KEY)
+#   paa.txt          mỗi dòng một câu "Mọi người cũng hỏi" (vẫn dùng khi lấy SERP qua Serper: Serper không trả PAA tiếng Việt)
+#   knowledge.yaml   các mục kho dữ liệu tác giả (nạp vào DB trước khi chạy)
+
+topic: vay tiền online
+brief: Làm mới bài hướng dẫn vay tiền online cho người lần đầu vay, nhấn mạnh cách nhận biết app an toàn.
+author_id: tac-gia-01
+author: {name: "Nguyễn An", url: "https://example.vn/tac-gia/nguyen-an"}
+
+# Để trống → theo kết quả triage (2 model). Điền để ép giá trị.
+branch: A
+mode:
+ymyl:
+
+target_words: 1800
+aio_present: false          # SERP có AI Overview không (true/false/để trống nếu không rõ)
+aio_cited_urls: []
+
+internal_pages:
+  - {url: "https://example.vn/lai-suat-vay-tieu-dung", title: "Lãi suất vay tiêu dùng"}
+  - {url: "https://example.vn/cach-tinh-lai-vay", title: "Cách tính lãi vay"}
+existing_titles:
+  - "Lãi suất vay tiêu dùng mới nhất"

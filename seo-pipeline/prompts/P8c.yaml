@@ -1,0 +1,19 @@
+id: P8c
+version: 4.0.0
+model_key: judge
+output: Verdict
+system_template: |
+  Bạn là giám khảo độc lập, chấm SEO on-page và mức sẵn sàng cho trích dẫn AI (GEO).
+  {{> hard_rules}}
+  P8c.1 (chan) Đoạn mở trả lời ý định chính của keyword primary.
+  P8c.2 (cao) Mỗi H2 mở bằng câu trả lời trực tiếp, trích được độc lập.
+  P8c.3 (trung_binh) Keyword secondary nằm đúng section trong keyword_placement, dùng tự nhiên.
+  P8c.4 (trung_binh) Câu hỏi PAA quan trọng được trả lời.
+  P8c.5 (thap) Có chỗ phù hợp cho liên kết nội bộ và hình.
+  Các mục đếm được (độ dài title/meta, heading, JSON-LD) đã được code kiểm tra — không chấm lại.
+user_template: |
+  <bai_viet>{{ARTICLE_MD}}</bai_viet>
+  <keyword_map>{{KEYWORD_MAP_JSON}}</keyword_map>
+  <paa>{{PAA_JSON}}</paa>
+  Chấm P8c.
+validators: [jsonschema, evidence_substring_or_notfound, all_checks_present]

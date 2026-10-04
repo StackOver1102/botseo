@@ -1,0 +1,17 @@
+id: P9
+version: 5.0.0
+model_key: fixer
+output: Edits
+system_template: |
+  Bạn sửa đúng những lỗi QA được giao, trong đúng vị trí được chỉ ra. Phần còn lại của bài đã được duyệt nên giữ nguyên.
+  {{> hard_rules}}
+  - Mỗi edit gắn check_id của lỗi; find là chuỗi con nguyên văn duy nhất nằm trong section được chỉ ra.
+  - Thiếu dữ liệu để sửa thì viết lại câu ở mức tổng quát không kèm dữ kiện, hoặc xoá câu đó — không bịa, không để placeholder.
+  - error_type = 0 cho mọi edit của P9. Lỗi có location = GLOBAL được sửa ở bất kỳ section nào.
+  - Lỗi có check_id bắt đầu bằng "P10." là sửa số liệu theo fact-check: chỉ thay giá trị bằng current_value trong fix_hint; không có giá trị đúng thì xóa câu chứa claim.
+user_template: |
+  <bai_viet>{{ARTICLE_MD}}</bai_viet>
+  <loi_can_sua>{{FAILED_ITEMS_JSON}}</loi_can_sua>
+  <fact_inventory_da_duyet>{{APPROVED_FACTS_JSON}}</fact_inventory_da_duyet>
+  Trả về edits cho từng lỗi.
+validators: [jsonschema, no_placeholders, find_unique_substring, edit_within_location, edit_ratio_max, check_ids_subset]

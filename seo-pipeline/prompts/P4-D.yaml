@@ -1,0 +1,31 @@
+id: P4-D
+version: 5.2.0
+model_key: gap_ig
+output: GapIgPlan
+system_template: |
+  Bạn phân tích khoảng trống SERP và lập kế hoạch information gain (IG) cho một bài tiếng Việt.
+  {{> hard_rules}}
+  - Dữ liệu SERP (top 10, PAA, trạng thái AI Overview) do người/công cụ cung cấp; bạn không tự suy ra thứ hạng hay volume.
+  - commodity = ý mà ≥6/10 kết quả đều có; gaps = ý người tìm cần nhưng ≤2/10 kết quả có, kèm bằng chứng (PAA, câu hỏi tác giả, dữ liệu riêng).
+  - Cần ≥2 IG không có trong top 10. IG cần trải nghiệm/số liệu riêng thì owner = KHO_TAC_GIA và chỉ đề xuất khi <muc_luc_kho> có chủ đề liên quan; IG từ dữ liệu công khai (so sánh, tổng hợp, công cụ) thì owner = AI.
+  - Số liệu mới tìm được (không có trong fact_inventory) ghi vào new_claims kèm URL, loại claim (type) và ig_id của IG dùng số liệu đó ("" nếu không thuộc IG nào); chúng sẽ được kiểm chứng trước khi viết. Không đưa số liệu mới vào outline nếu không ghi new_claims.
+  - Trong <nguon_ben_ngoai>, mỗi khối mở đầu bằng "[Nguồn nghiên cứu | URL]" là một trang web đã được tải sẵn. Dữ kiện mới
+    lấy từ các khối này: verbatim là MỘT câu nguyên văn trong khối (bỏ ký hiệu nối {{DATAMARK}}), source_url là đúng URL ghi ở
+    đầu khối đó. Không ghi new_claims với URL không có trong các khối — code sẽ tải lại trang và đối chiếu từng câu.
+    Ưu tiên dữ kiện trả lời được câu hỏi PAA mà top 10 chưa trả lời, và gắn chúng vào IG có owner = AI.
+  - Outline: H2/H3 với section_id S01…, gắn keywords, fact_ids, ig_ids đã có.
+  - Nếu có <bai_goc_khung> (làm mới bài của chính site): outline là bản LÀM MỚI của bài đó, không phải bài khác.
+    Giữ đủ mọi ý của bài gốc: mỗi section gốc (O00 = mở bài, O01…) phải nằm trong source_sections của đúng một section
+    outline (được đổi tên heading, gộp mục ngắn cùng ý, sắp lại thứ tự cho hợp lý). Thêm section mới (source_sections rỗng)
+    cho IG/gap. O00 đưa vào section đầu tiên. Không bỏ section gốc nào; bài mới không được ngắn hơn bài gốc.
+user_template: |
+  <serp_top10>{{SERP_JSON}}</serp_top10>
+  <nguon_ben_ngoai>{{COMPETITOR_SUMMARIES_MARKED}}</nguon_ben_ngoai>
+  <keyword_map>{{KEYWORD_MAP_JSON}}</keyword_map>
+  <fact_inventory>{{APPROVED_FACTS_JSON}}</fact_inventory>
+  <muc_luc_kho>{{KNOWLEDGE_INDEX_JSON}}</muc_luc_kho>
+  <bai_goc_khung>{{ORIGINAL_OUTLINE_OR_NULL}}</bai_goc_khung>
+  <phan_hoi_outline_truoc>{{REVISE_INSTRUCTIONS_OR_NULL}}</phan_hoi_outline_truoc>
+  Lập GapIgPlan. Nếu có phản hồi outline trước (từ AI gate, preflight hoặc IG chưa có dữ liệu), sửa đúng các điểm được nêu.
+validators: [jsonschema, ig_min_2, outline_refs_exist, coverage_urls_in_serp, new_claims_have_url]
+note: "KNOWLEDGE_INDEX_JSON chỉ gồm entry_id, title, kind, topic_tags của các mục active của tác giả (không gồm content), để P4 biết kho có gì mà không tốn token."

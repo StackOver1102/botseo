@@ -1,0 +1,3 @@
+- [SEO pipeline: cách gọi model](seo-pipeline-provider-setup.md) — Claude qua API, GPT/Gemini qua extension web (vẫn giữ nhánh API)
+- [SEO pipeline: tự động 100%](seo-pipeline-fully-automated.md) — không dừng NEEDS_HUMAN; lỗi thì rewind về bước gốc, chạy lại, đi tiếp
+- [SEO pipeline: nhánh A](seo-pipeline-branch-a.md) — A = full như B nhưng thấy bài gốc; không ngắn hơn gốc; rework là tuỳ chọn

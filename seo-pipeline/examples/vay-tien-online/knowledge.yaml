@@ -1,0 +1,23 @@
+# Kho dữ liệu tác giả: trải nghiệm / số liệu thật của tác giả. AI chỉ được trích nguyên văn từ đây.
+# Mỗi số tiền, %, ngày trong content phải được khai trong facts (không thì bị từ chối khi nạp).
+# kind: trai_nghiem | so_lieu_noi_bo | case_study | quan_diem | quy_trinh
+- title: Trải nghiệm vay qua app lần đầu
+  kind: trai_nghiem
+  content: >-
+    Tháng 5/2026 mình vay 5 triệu qua một app có giấy phép, bị trừ phí thẩm định 300k ngay khi giải ngân,
+    nên thực nhận chỉ 4,7 triệu.
+  topic_tags: [vay app, phí ẩn, vay tiền online]
+  valid_until: 2027-12-31
+  facts:
+    - {label: khoản vay, value: "5", unit: triệu, as_of: 2026-05}
+    - {label: phí thẩm định, value: "300", unit: k, as_of: 2026-05}
+    - {label: thực nhận, value: "4,7", unit: triệu, as_of: 2026-05}
+
+- title: Cách mình kiểm tra giấy phép app vay
+  kind: quy_trinh
+  content: >-
+    Mình tra tên công ty trên trang của Ngân hàng Nhà nước, đối chiếu mã số doanh nghiệp in trong hợp đồng,
+    và từ chối mọi app đòi quyền truy cập danh bạ.
+  topic_tags: [app vay uy tín, lừa đảo, kiểm tra giấy phép]
+  valid_until: 2027-12-31
+  facts: []

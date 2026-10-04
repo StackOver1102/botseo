@@ -1,0 +1,24 @@
+# Proxy Gemini web → API, build từ ./src (fork của https://github.com/ntthanh2603/gemini-web-to-api,
+# nhánh feat/real-deep-research: thêm Deep Research thật của Gemini). Chỉ nghe ở máy này.
+# Proxy không có xác thực: KHÔNG đổi 127.0.0.1 thành 0.0.0.0.
+services:
+  gemini-proxy:
+    build: ./src
+    image: gemini-web-to-api:local
+    container_name: gemini-web-to-api
+    ports: ["127.0.0.1:4981:4981"]
+    env_file: [.env]
+    environment:
+      - PORT=4981
+      - APP_ENV=production
+      # native = Deep Research thật (kế hoạch → "Start research" → chờ báo cáo); emulated = chuỗi prompt chat thường
+      - GEMINI_DEEP_RESEARCH_MODE=native
+      # Lưu response thô của các lượt Deep Research để đối chiếu khi Google đổi định dạng; bỏ dòng này để tắt
+      - GEMINI_DEEP_RESEARCH_DEBUG_DIR=/home/appuser/debug
+    restart: unless-stopped
+    volumes:
+      - ./.cookies:/home/appuser/.cookies
+      - ./debug:/home/appuser/debug
+    tmpfs:
+      - /tmp
+      - /home/appuser/.cache

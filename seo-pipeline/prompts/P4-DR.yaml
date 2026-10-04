@@ -1,0 +1,9 @@
+id: P4-DR
+version: 4.0.0
+model_key: deep_research
+output: markdown
+engine: gemini_deep_research_agent
+user_template: |
+  Nghiên cứu chủ đề "{{TOPIC}}" cho người đọc Việt Nam năm {{YEAR}}: câu hỏi người dùng thường gặp, dữ liệu/thống kê mới nhất có nguồn chính thức, tranh cãi hoặc hiểu lầm phổ biến, góc nhìn chưa được các bài phổ biến khai thác.
+  Liệt kê nguồn kèm URL và ngày. Báo cáo bằng tiếng Việt.
+post: "Kết quả Markdown được bọc <nguon_ben_ngoai> và đưa vào P4-G; không đưa thẳng vào P6."

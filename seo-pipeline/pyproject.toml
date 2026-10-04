@@ -1,0 +1,13 @@
+[project]
+name = "seo-pipeline"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["regex", "pydantic>=2", "pyyaml", "jsonschema", "psycopg[binary]>=3.2", "anthropic>=1.8", "httpx", "fastapi", "uvicorn", "json-repair", "trafilatura"]
+
+[project.optional-dependencies]
+vi = ["underthesea"]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

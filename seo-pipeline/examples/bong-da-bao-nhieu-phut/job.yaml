@@ -1,0 +1,15 @@
+# Demo bài nhánh B từ file keyword Ahrefs bóng đá.
+# auto_source: 5 = tự lấy 5 trang top SERP (đã lọc nhà cái/soi kèo/MXH) làm tư liệu: chỉ để trích claim (P2a/P2b),
+# không đưa vào prompt viết bài, bị xoá sau FACT_GATE, bài cuối phải trùng < 10% với từng nguồn.
+# Bỏ dòng auto_source (và không có source.md) = bài mới hoàn toàn, dữ kiện chỉ từ nghiên cứu SERP + fact-check.
+topic: 1 trận bóng đá bao nhiêu phút
+brief: >-
+  Bài giải thích thời gian một trận bóng đá theo Luật bóng đá: 2 hiệp chính, nghỉ giữa hiệp, bù giờ, hiệp phụ
+  và loạt sút luân lưu; khác biệt ở các giải/lứa tuổi nếu có nguồn. Người đọc là fan phổ thông, cần câu trả lời nhanh.
+author_id: tac-gia-01
+author: {name: "Nguyễn An", url: "https://example.vn/tac-gia/nguyen-an"}
+branch: B
+auto_source: 5
+mode: standard
+ymyl: false
+target_words: 1200

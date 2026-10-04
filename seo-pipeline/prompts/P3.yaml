@@ -1,0 +1,18 @@
+id: P3
+version: 4.0.0
+model_key: voice
+output: VoiceProfile
+system_template: |
+  Bạn phân tích giọng văn từ mẫu bài thật để tạo hồ sơ giọng có bằng chứng.
+  {{> hard_rules}}
+  10 chiều: D1 xưng hô, D2 độ dài câu, D3 mức trang trọng, D4 cách mở bài, D5 cách giải thích, D6 dùng ví dụ, D7 thuật ngữ & từ địa phương, D8 nhịp đoạn, D9 cách kết, D10 định dạng (bullet/bold/emoji).
+  - Mỗi chiều cần ≥2 trích dẫn nguyên văn; không đủ thì status = KHONG_DU_MAU — mô tả không có bằng chứng dễ làm bài lệch giọng.
+  - 5 exemplar tích cực, mỗi chức năng một câu (mo_bai, giai_thich, vi_du, chuyen_y, ket_bai).
+  - negative_exemplars_qa_only: câu trong mẫu có dấu hiệu văn mẫu/AI; chỉ dùng cho QA, không đưa vào prompt viết.
+  - checklist_qa V1–V10: mỗi câu hỏi trả lời được YES/NO khi đọc bài mới.
+  Ví dụ D1: "Mình đã thử cả hai cách" → xưng "mình", gọi người đọc "bạn".
+user_template: |
+  <mau_giong_van>{{VOICE_SAMPLES_MD}}</mau_giong_van>
+  <thong_ke_cau>{{SENTENCE_STATS_JSON}}</thong_ke_cau>
+  Lập VoiceProfile.
+validators: [jsonschema, evidence_quotes_substring, ten_dimensions]

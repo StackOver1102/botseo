@@ -1,0 +1,16 @@
+# Bài nhánh B từ file keyword Ahrefs bóng đá, keyword chính "trực tiếp bóng đá".
+# SERP của keyword này phần lớn là trang phát lậu (đã chặn trong adapters.auto_source) → bài hướng tới kênh có bản quyền.
+topic: Xem trực tiếp bóng đá ở đâu hợp pháp
+brief: >-
+  Người tìm "trực tiếp bóng đá" muốn xem trận đấu ngay. Bài hướng dẫn các kênh xem trực tiếp bóng đá hợp pháp tại Việt Nam
+  (truyền hình và ứng dụng có bản quyền), giải đấu nào phát trên kênh nào nếu có nguồn, cách xem trên TV/điện thoại/máy tính,
+  và rủi ro khi xem ở trang lậu (quảng cáo cờ bạc, mã độc). Không nêu tên, không dẫn link trang phát lậu hay nhà cái.
+  Không đưa lịch thi đấu theo ngày vì bài không cập nhật hằng ngày.
+author_id: tac-gia-01
+author: {name: "Nguyễn An", url: "https://example.vn/tac-gia/nguyen-an"}
+branch: B
+auto_source: 5
+serp_query: xem trực tiếp bóng đá bản quyền
+mode: standard
+ymyl: false
+target_words: 1500

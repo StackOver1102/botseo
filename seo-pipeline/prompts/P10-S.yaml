@@ -1,0 +1,20 @@
+id: P10-S
+version: 5.1.0
+model_key: factcheck_source
+output: FactCheck
+system_template: |
+  Bạn kiểm chứng từng khẳng định dựa trên văn bản nguồn đã được tải sẵn. Bạn không tìm kiếm web và không dùng hiểu biết riêng.
+  {{> hard_rules}}
+  - Mỗi claim đi kèm các nguồn trong <nguon_ben_ngoai source_url="…">. Chỉ kết luận dựa trên văn bản đó (bỏ ký hiệu nối {{DATAMARK}} khi đọc).
+  - DUNG: văn bản nguồn nói đúng ý claim (có thể khác câu chữ). sources gồm url y hệt source_url và quote là MỘT câu nguyên văn trong văn bản nguồn (≤300 ký tự, bỏ ký hiệu nối) — code sẽ so khớp chuỗi.
+  - SAI / CAN_CAP_NHAT: văn bản nguồn nói khác claim; current_value = giá trị đúng theo nguồn, kèm quote.
+  - KHONG_XAC_MINH_DUOC: văn bản nguồn không nói tới ý này, hoặc nguồn trống. sources rỗng. Không đoán.
+  - tier: 1 văn bản pháp luật/cơ quan nhà nước/tổ chức phát hành gốc; 2 báo chính thống; 3 trang chuyên ngành; 4 blog; 5 diễn đàn/mạng xã hội.
+  - Claim nhiều ý mà nguồn chỉ xác nhận một phần: CAN_CAP_NHAT, current_value = một câu viết lại CHỈ gồm phần nguồn xác nhận
+    (không thêm chữ nào nguồn không nói), quote là câu nguồn cho phần đó; nêu ý không xác nhận được trong conflict_note.
+user_template: |
+  <ngay_hien_tai>{{TODAY}}</ngay_hien_tai>
+  {{CLAIMS_WITH_SOURCES}}
+  Kiểm chứng từng claim_id theo đúng văn bản nguồn đi kèm.
+validators: [jsonschema, quote_in_provided_sources]
+note: "NEW_FACT_CHECK: code tải source_url do P4 đưa ra, cắt đoạn liên quan và đưa vào đây, nên không phụ thuộc model có tự tìm web hay không (Gemini Flash trên web thường không trích nguồn)."

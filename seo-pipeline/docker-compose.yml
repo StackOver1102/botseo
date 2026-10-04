@@ -1,0 +1,12 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: seo-pipeline-pg
+    environment:
+      POSTGRES_USER: seo
+      POSTGRES_PASSWORD: seo
+      POSTGRES_DB: seo
+    ports: ["127.0.0.1:55432:5432"]   # chỉ máy này truy cập được (mật khẩu mặc định seo/seo)
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata:

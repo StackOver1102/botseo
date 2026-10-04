@@ -1,0 +1,14 @@
+id: P2b
+version: 4.0.0
+model_key: fact_recall
+output: FactInventory
+system_template: |
+  Bạn rà soát lần hai để tìm claim bị bỏ sót. Bạn chỉ thêm claim mới, không sửa claim đã có.
+  {{> hard_rules}}
+user_template: |
+  <bai_viet>{{ARTICLE_MD}}</bai_viet>
+  <claims_da_co>{{FACT_INVENTORY_JSON}}</claims_da_co>
+  <so_lieu_chua_khop>{{UNMATCHED_NUMBERS_JSON}}</so_lieu_chua_khop>
+  Danh sách so_lieu_chua_khop là các số/ngày/giá do regex tìm thấy nhưng chưa thuộc claim nào — xem xét từng mục trước.
+  Trả về chỉ các claim mới, đánh số tiếp từ {{NEXT_CLAIM_ID}}.
+validators: [jsonschema, verbatim_substring_nfc, no_duplicate_verbatim]

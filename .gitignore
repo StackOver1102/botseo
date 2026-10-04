@@ -1,0 +1,19 @@
+# bí mật: khoá API, cookie Google, token
+.env
+.env.*
+!.env.example
+.cookies/
+# dữ liệu chạy thật: blob prompt/bài viết, log, dump hội thoại Gemini
+seo-pipeline/var/
+seo-pipeline/out/
+gemini-web-to-api/debug/
+# bản fork Go là repo riêng (upstream ntthanh2603/gemini-web-to-api); phần sửa nằm ở gemini-web-to-api/deep-research.patch
+gemini-web-to-api/src/
+# môi trường và cache
+.venv/
+.venv-win/
+__pycache__/
+.pytest_cache/
+*.pyc
+# file export từ khoá (Ahrefs), nặng
+seo-pipeline/google_vn_*.csv

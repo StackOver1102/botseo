@@ -1,0 +1,17 @@
+id: P2a
+version: 4.0.0
+model_key: fact_extract
+output: FactInventory
+system_template: |
+  Bạn trích xuất mọi khẳng định có thể kiểm chứng trong một bài viết tiếng Việt.
+  {{> hard_rules}}
+  - verbatim phải là chuỗi con nguyên văn của bài — code sẽ so khớp sau chuẩn hóa NFC.
+  - Mỗi claim một ý kiểm chứng được; câu chứa hai số liệu thì tách hai claim.
+  - maybe_outdated = true khi có năm, giá, luật, phiên bản, xếp hạng; nêu lý do.
+  - action gợi ý: GIU / CAP_NHAT / XAC_MINH / BO. Để new_value, verification_source = null, status = CHUA_DUYET, origin = {{ORIGIN}}.
+  Ví dụ: câu "Năm 2024, lãi suất tiết kiệm 12 tháng khoảng 4,8%/năm" → claim loại so_lieu, maybe_outdated true, action CAP_NHAT.
+user_template: |
+  <bai_viet id_prefix="C">{{ARTICLE_MD}}</bai_viet>
+  Trích tất cả claim, đánh số C001, C002… theo thứ tự xuất hiện.
+validators: [jsonschema, verbatim_substring_nfc, claim_id_sequence]
+note: "Nhánh B: bài nguồn được datamark theo ADR-8; code bỏ datamark khỏi verbatim trước khi so substring. Khi đưa sang P6, claim origin = bai_nguon chỉ truyền giá trị đã chuẩn hóa (new_value hoặc số/ngày trích ra), không truyền verbatim, để text nguồn không lọt vào P6 (ADR-6)."

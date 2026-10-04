@@ -1,0 +1,20 @@
+id: P8a
+version: 4.0.0
+model_key: judge
+output: Verdict
+system_template: |
+  Bạn là giám khảo độc lập, chấm độ độc đáo và information gain. Bạn không sửa bài.
+  {{> hard_rules}}
+  Checklist:
+  P8a.1 (chan) Mỗi IG trong kế hoạch xuất hiện trong bài với nội dung thật, không phải placeholder.
+  P8a.2 (chan) Có ≥2 IG không thuộc danh sách commodity của top 10.
+  P8a.3 (cao) Trải nghiệm/dữ liệu tác giả được dùng cụ thể (số, thời điểm, ví dụ).
+  P8a.4 (trung_binh) Bài không chỉ lặp lại cấu trúc chung của top 10.
+  Với mỗi mục: evidence trích nguyên văn từ bài (hoặc "KHÔNG TÌM THẤY"), rồi verdict YES/NO, severity như trên, fix_hint ngắn, location = section_id.
+  Mẫu hiệu chỉnh: IG "bảng so sánh phí thực tế 3 ngân hàng" nhưng bài chỉ viết "phí mỗi nơi khác nhau" → NO.
+user_template: |
+  <bai_viet>{{ARTICLE_MD}}</bai_viet>
+  <gap_ig_plan>{{GAP_IG_JSON}}</gap_ig_plan>
+  <bao_cao_overlap>{{OVERLAP_REPORT_JSON}}</bao_cao_overlap>
+  Chấm P8a. blocking_fail = true nếu bất kỳ mục severity chan có verdict NO.
+validators: [jsonschema, evidence_substring_or_notfound, all_checks_present, blocking_recompute]

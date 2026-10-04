@@ -1,0 +1,20 @@
+id: P10
+version: 4.0.0
+model_key: factcheck
+output: FactCheck
+provider_params:
+  gemini: {model: gemini-3.1-pro-preview, tools: [{type: google_search}], response_format: "$FactCheck", thinking_level: high}
+system_template: |
+  Bạn kiểm chứng từng khẳng định theo cách tách nhỏ (SAFE): tách claim thành ý nguyên tử, tìm nguồn, so sánh.
+  {{> hard_rules}}
+  - Mỗi nguồn trong sources: quote phải là câu nguyên văn trên trang nguồn — code sẽ tải trang và so khớp.
+  - tier: 1 văn bản pháp luật/cơ quan nhà nước/tổ chức phát hành gốc; 2 báo chính thống; 3 trang chuyên ngành; 4 blog; 5 diễn đàn/mạng xã hội.
+  - Hai nguồn tier ≤2 mâu thuẫn → MAU_THUAN, ghi cả hai vào sources và ghi conflict_note. Không tìm được nguồn tier ≤3 → KHONG_XAC_MINH_DUOC, sources rỗng.
+  - Claim có origin = kho_tac_gia là dữ liệu riêng của tác giả: không kiểm chứng trên web, trả DUNG với sources rỗng và suggested_action = "du_lieu_noi_bo".
+  Ví dụ: claim "Mức lương cơ sở là 2,34 triệu đồng/tháng" → tìm văn bản quy định hiện hành; nếu đã đổi → CAN_CAP_NHAT, current_value = mức mới, kèm URL và câu trích.
+user_template: |
+  <claims>{{CLAIMS_TO_CHECK_JSON}}</claims>
+  <ngay_hien_tai>{{TODAY}}</ngay_hien_tai>
+  Kiểm chứng từng claim_id.
+validators: [jsonschema, url_200_and_quote_present, grounding_url_subset, tier_rules]
+note: "grounding_url_subset: URL grounding của Gemini có thể là URL redirect; code resolve redirect (HEAD, tối đa 5 bước) rồi mới so với sources[].url. P10 cũng chạy ở NEW_FACT_CHECK trên new_claims của P4; chỉ claim DUNG được thêm vào FactInventory (origin = nghien_cuu_b4, DA_DUYET)."

@@ -1,0 +1,22 @@
+id: P6-H
+version: 5.3.0
+model_key: writer
+output: ArticleDraft
+extends: P6-S
+mode: section_by_section   # cùng một cuộc hội thoại; phần prefix (system + data) được cache
+provider_params:
+  anthropic: {max_tokens: 6000, output_config: {effort: high, format: "$ArticleDraft"}}
+user_template: |
+  <voice_profile>{{VOICE_PROFILE_POSITIVE_JSON}}</voice_profile>
+  <outline>{{OUTLINE_JSON}}</outline>
+  <fact_inventory_da_duyet>{{APPROVED_FACTS_JSON}}</fact_inventory_da_duyet>
+  <author_evidence>{{AUTHOR_EVIDENCE_JSON}}</author_evidence>
+  <keyword_map>{{KEYWORD_PRIMARY_SECONDARY_JSON}}</keyword_map>
+  <tu_can_tranh>{{BLACKLIST_HIGH_LIST}}</tu_can_tranh>
+  <section_hien_tai>{{SECTION_JSON}}</section_hien_tai>
+  <tom_tat_da_viet>{{PREVIOUS_SECTIONS_SUMMARY}}</tom_tat_da_viet>
+  Viết riêng section {{SECTION_ID}} ("{{HEADING}}") cùng các H3 con trong section_hien_tai, mở đầu bằng <!-- {{SECTION_ID}} -->; nối mạch với phần trước, không lặp ý đã viết.
+  Độ dài cả bài mục tiêu {{TARGET_WORDS}} từ trên {{SECTION_COUNT}} section. Mọi số liệu phải đến từ fact_inventory_da_duyet.
+  keyword_placement, can_nguoi, change_log chỉ ghi cho section này.
+  Không viết placeholder [CẦN NGƯỜI…]; fact và số liệu đã có trong tom_tat_da_viet thì không trình bày lại.
+post: "Mỗi section là một request độc lập (runner single-turn); phần dữ liệu lặp lại nên đặt cache breakpoint ở khối dữ liệu khi tối ưu chi phí. Code ghép các section theo section_id."

@@ -1,0 +1,257 @@
+# Cách gọi từng hãng: api = gọi thẳng API; external = tạo external task cho extension trình duyệt
+# (ChatGPT/Gemini web) lấy về. External không ép schema được nên code render <output_schema> vào prompt.
+providers:
+  anthropic: {mode: api, max_retries: 2, timeout_seconds: 600}
+  openai: {mode: external, poll_seconds: 60, task_lease_seconds: 900, max_task_failures: 3,
+           api_base: "https://api.openai.com/v1", api_key_env: OPENAI_API_KEY, timeout_seconds: 600}
+  # gemini mode: proxy = proxy cục bộ ../gemini-web-to-api (cookie Gemini web, kể cả Deep Research thật);
+  #   external = extension trên Gemini web (cách cũ); api = Gemini API chính thức (cần GEMINI_API_KEY).
+  gemini: {mode: proxy, poll_seconds: 60, task_lease_seconds: 900, max_task_failures: 3,
+           api_base: "https://generativelanguage.googleapis.com/v1beta", api_key_env: GEMINI_API_KEY, timeout_seconds: 600,
+           proxy_base: "http://127.0.0.1:4981/gemini/v1beta",
+           # Tên model trong `models:` → tên proxy liệt kê ở /openai/v1/models
+           model_map: {gemini-3.1-pro-preview: gemini-3.1-pro},
+           # Flash trên web từ chối khi output dài (HTTP 200 + câu "Tôi không thể trợ giúp…") → gọi lại bằng model này
+           fallback_model: gemini-3.1-pro,
+           deep_research: {language: Vietnamese, max_sources: 100, lease_minutes: 120},
+           # Extension Chrome gửi cookie Gemini về /external/gemini-cookies; khi proxy báo cookie hết hạn thì web app ghi
+           # cookie mới vào <proxy_dir>/.env và chạy restart_command trong thư mục đó (cần Docker đang chạy).
+           cookie_sync: {enabled: true, proxy_dir: "../gemini-web-to-api", min_interval_seconds: 300,
+                         restart_command: [docker, compose, up, -d, --force-recreate]}}
+# Selector CSS cho extension, gửi kèm mỗi task (thử lần lượt, trước selector cài sẵn trong extension).
+# Giao diện ChatGPT/Gemini đổi → sửa ở đây là có hiệu lực ngay, không cần reload extension.
+# Câu trả lời JSON được nhận ra theo nội dung (có đủ key bắt buộc), nên `response` chỉ cần cho task Markdown.
+extension:
+  # URL mở chat mới. fast: dùng cho prompt trong fast_prompts (chỉ chấm YES/NO, không cần model suy luận chậm).
+  # [CẦN KIỂM TRA] chọn model nhanh trong ChatGPT rồi copy URL trên thanh địa chỉ (vd. https://chatgpt.com/?model=...)
+  # vào openai.fast; để null = dùng default. Sửa ở đây có hiệu lực ngay, không cần restart.
+  chat_urls:
+    openai: {default: "https://chatgpt.com/", fast: null}
+    gemini: {default: "https://gemini.google.com/app", fast: null}
+  fast_prompts: [G, B0-H, P5, PF]
+  selectors:
+    openai:
+      # Editor thật (ProseMirror) trước: #prompt-textarea có lúc là textarea tạm khi trang đang tải, chữ ghi vào sẽ mất
+      input: ["div.ProseMirror[contenteditable='true']", "#prompt-textarea[contenteditable='true']", "#prompt-textarea"]
+      send: ["button[data-testid='send-button']", "button[type='submit'][aria-label='Send']"]
+      stop: ["button[data-testid='stop-button']", "button[aria-label*='stop' i]"]
+      response: ["[data-markdown-text-style='assistant-message']", "[data-message-author-role='assistant'] .markdown"]
+    gemini:
+      input: ["rich-textarea .ql-editor", "div.ql-editor[contenteditable='true']"]
+      send: ["button.send-button", "button[aria-label*='send' i]"]
+      stop: ["button.stop", "button[aria-label*='stop' i]"]
+      response: ["model-response message-content", "model-response .model-response-text"]
+      # Báo cáo Deep Research (DOM 2026-09): deep-research-immersive-panel > … > message-content#extended-response-message-content
+      #   > div#extended-response-markdown-content (chỉ nội dung, không gồm thanh công cụ Contents/Share & Export/Create)
+      report: ["#extended-response-markdown-content", "deep-research-immersive-panel message-content .markdown",
+               "deep-research-immersive-panel"]
+  # Deep Research của Gemini web cho P4-DR (mode heavy). Nút được tìm theo CHỮ HIỂN THỊ (không phân biệt hoa thường),
+  # thêm chữ theo ngôn ngữ giao diện nếu Gemini hiển thị khác.
+  deep_research:
+    enabled: true
+    prompt_ids: [P4-DR]
+    timeout_minutes: 40
+    texts:
+      # Đường đi qua menu, bấm lần lượt từng bước; mục cuối đã hiện sẵn thì bấm luôn.
+      # Giao diện 2026-09: nút "+" (aria "Upload & tools") → "More tools" → "Deep research"
+      menu_path:
+        - ["Upload & tools", "Tải lên và công cụ", "Công cụ"]
+        - ["More tools", "Thêm công cụ"]
+        - ["Deep research", "Nghiên cứu chuyên sâu"]
+      start: ["Start research", "Bắt đầu nghiên cứu"]
+# Model thay thế khi phải đổi họ (gate/judge phải khác họ với model tạo artifact, ADR-5)
+family_defaults: {anthropic: claude-sonnet-5, openai: gpt-6-luna, gemini: gemini-3.8-flash}
+# USD / 1M token (§9). External = 0 vì chạy qua gói web.
+pricing:
+  claude-opus-5-5: {input: 4.0, output: 20.0, cache_read: 0.20, cache_write_5m: 5.0, cache_write_1h: 8.0}
+  claude-sonnet-5: {input: 2.0, output: 10.0, cache_read: 0.20, cache_write_5m: 2.5, cache_write_1h: 4.0}
+  # [CXM] Sonnet 5.5 (phát hành 2026-09-28): giá TẠM lấy bằng Sonnet 5 — kiểm tra bảng giá của Anthropic rồi sửa.
+  # Model không có trong bảng này thì chi phí bị tính = 0 và trần chi phí không còn tác dụng.
+  claude-sonnet-5-5: {input: 2.0, output: 10.0, cache_read: 0.20, cache_write_5m: 2.5, cache_write_1h: 4.0}
+  claude-haiku-4-5-20251001: {input: 1.0, output: 5.0, cache_read: 0.10, cache_write_5m: 1.25, cache_write_1h: 2.0}
+  gpt-6-sol: {input: 2.0, output: 10.0, cache_read: 0.20}
+  gpt-6-luna: {input: 0.10, output: 0.50, cache_read: 0.01}
+  gemini-3.1-pro-preview: {input: 2.0, output: 12.0, cache_read: 0.20}
+  gemini-3.8-flash: {input: 0.75, output: 3.75, cache_read: 0.075}
+# Tác giả mặc định cho job tạo từ UI (JSON-LD Article cần author; thiếu thì FINAL_GATE cảnh báo). Điền tên/URL thật.
+default_author: {name: null, url: null}
+# Tài liệu nghiên cứu cho P4 (GAP_IG_AI, mode standard/heavy): code tìm theo câu hỏi PAA + chủ đề bằng SERP provider,
+# tải trang (bỏ trang bị chặn và các trang job đã lấy làm tư liệu) và đưa đoạn liên quan vào prompt để model đề xuất
+# dữ kiện mới CÓ NGUỒN (new_claims) — qua proxy/extension model không tự tra web. Mỗi truy vấn một lượt tìm Serper.
+gap_research: {enabled: true, max_searches: 4, results_per_query: 2, excerpt_chars: 3000}
+# FACTCHECK (P10). mode: search = code tìm nguồn cho từng claim bằng SERP provider (Serper), tải trang, model chỉ đối
+#   chiếu (P10-S) — dùng khi Gemini chạy qua proxy/extension, vì ở đó model không tự tra web và trả "không xác minh
+#   được" cho mọi claim; model = để model tự tìm (chỉ đúng với Gemini API chính thức có google_search).
+#   Mỗi claim một lượt tìm Serper (tối đa max_searches/bài, claim số liệu/giá/luật/ngày được ưu tiên).
+factcheck: {mode: search, results_per_claim: 2, max_searches: 40, excerpt_chars: 2400, claims_per_call: 6}
+# Tự học giọng văn: tác giả chưa có hồ sơ dựng từ bài của chính họ thì mỗi job nhánh B có nguồn SERP (auto_source) sẽ
+# chạy P3 trên các trang nguồn và cập nhật hồ sơ của tác giả, tối đa max_jobs job rồi giữ nguyên. Hồ sơ loại này chỉ
+# giữ mô tả phong cách, không giữ câu trích của site khác. enabled: false = tắt (bài viết theo giọng trung tính).
+voice_learning: {enabled: true, max_jobs: 5, max_sample_chars: 30000, min_sample_words: 600}
+locale: {language: vi, dialect: toan_quoc, tone_style: new, tone_example: "hoà, thuỷ, khoẻ"}
+models:
+  triage: {provider: gemini, model: gemini-3.8-flash}
+  triage_second: {provider: openai, model: gpt-6-luna}   # TRIAGE_GATE: chạy lại B0-H bằng họ khác
+  preflight: {provider: gemini, model: gemini-3.8-flash}
+  keyword_map: {provider: openai, model: gpt-6-sol}   # ChatGPT web (miễn phí); gate tự đổi sang Gemini (khác họ)
+  # P2a trả JSON dài (mỗi claim một câu nguyên văn): Flash trên web từ chối loại output này → dùng Pro
+  fact_extract: {provider: gemini, model: gemini-3.1-pro-preview}   # verbatim được code so khớp với nguồn
+  fact_recall: {provider: openai, model: gpt-6-luna, effort: low}
+  voice: {provider: anthropic, model: claude-sonnet-5-5, effort: low}   # P3 hồ sơ giọng (chủ dự án yêu cầu không dùng Haiku)
+  gap_ig: {provider: gemini, model: gemini-3.1-pro-preview, thinking_level: high, grounding: true}
+  deep_research: {provider: gemini, model: gemini-deep-research}
+  knowledge_select: {provider: gemini, model: gemini-3.8-flash}
+  embedding: {provider: gemini, model: "<embedding model>"}   # [CXM] chọn model embedding hỗ trợ tiếng Việt
+  gate: {provider: openai, model: gpt-6-luna, effort: medium}   # tự đổi họ nếu trùng họ với model tạo artifact
+  gate_heavy: {provider: openai, model: gpt-6-sol, effort: medium}   # dùng cho QA và FINAL
+  writer: {provider: anthropic, model: claude-sonnet-5, effort: medium}   # high: ~17k token suy luận/bài (~0,17 USD) mà bài không khá hơn rõ
+  rework_brief: {provider: anthropic, model: claude-sonnet-5-5, effort: low}   # rework: tự xác định YMYL + keyword
+  rework: {provider: anthropic, model: claude-sonnet-5, effort: low}   # nhánh A: viết lại bài có sẵn (~0,05–0,1 USD/bài)
+  fixer: {provider: anthropic, model: claude-sonnet-5-5, effort: low}   # P7b/P9: sửa hẹp (find/replace), effort thấp
+  writer_ab: {provider: openai, model: gpt-6-sol, effort: high, enabled: false, share: 0.2}
+  meta: {provider: gemini, model: gemini-3.8-flash}
+  judge: {provider: gemini, model: gemini-3.8-flash}   # QA P8b/P8d: ChatGPT web hay treo với prompt dài (đổi thành tệp đính kèm)
+  judge_alt: {provider: gemini, model: gemini-3.8-flash, passes: [P8a, P8c]}   # chấm song song với ChatGPT   # tự đổi sang gemini nếu writer là openai
+  factcheck: {provider: gemini, model: gemini-3.1-pro-preview, grounding: true}
+  factcheck_source: {provider: gemini, model: gemini-3.8-flash}   # P10-S: đối chiếu với nguồn code đã tải, không cần web
+  changelog: {provider: gemini, model: gemini-3.8-flash}
+thresholds:   # tất cả là heuristic
+  rubric_pass_ratio: 0.77   # 14/18 = 0.778 đạt; 13/18 = 0.722 trượt
+  branch_b_containment_max: 0.10
+  # Luồng rework (REWORK_CHECK): độ trùng 5-gram với bản cũ tối đa, tỷ lệ độ dài cho phép
+  rework_containment_max: 0.25
+  rework_length_ratio: [1.0, 1.4]   # yêu cầu: bài viết lại ≥ bản gốc; trần 140% chỉ chặn độn chữ quá mức (model hay viết 115–135%)
+  rework_chunk_words: 700      # viết lại từng phần ≤700 chữ (bài dài một lượt thì model chép gần nguyên phần cuối)
+  # Claim từ bài nguồn đưa cho writer/fixer: sentence = một câu dữ kiện ≤220 ký tự (lệch ADR-6, bài có nội dung cụ thể)
+  # | values = chỉ số/ngày như spec (claim không có số thành rỗng → bài chung chung)
+  writer_source_facts: sentence
+  shingle_n: 5
+  max_edit_ratio: 0.05
+  fix_rounds_per_check: 1
+  fix_edit_ratio_max: 0.15    # P9 (QA, fact-check) được sửa tối đa 15% số câu; P7b vẫn theo max_edit_ratio
+  fact_apply_min_tier: 2      # FACT_APPLY chỉ tự sửa khi có nguồn tier ≤ giá trị này
+  outline_revise_max: 2
+  kw_map_rows_per_batch: 300
+  repair_attempts: 2
+  sentence_max_syllables: 45
+  long_sentence_share_max: 0.10
+  sentence_cv_min: 0.35
+  title_chars: [50, 60]
+  meta_chars: [120, 155]
+  title_px_warn: 580
+  ig_min: 2
+  blocking_claim_types: [so_lieu, gia, luat, ngay]   # claim chặn ở FACT_SIGNOFF (YMYL: mọi claim)
+  number_ignore_patterns: ["^\\s*\\d+\\.", "Bước \\d+", "top \\d+", "(?i)phần \\d+"]
+gates:
+  min_confidence: 0.8
+  # AI gate escalate (luật cứng đã pass) hoặc hết lượt revise: proceed = đi tiếp, ghi vào artifact Warnings;
+  # human = dừng ở NEEDS_HUMAN như spec. Luật cứng fail sau khi hết revise và lỗi hạ tầng vẫn luôn dừng.
+  on_ai_escalate: proceed
+  # OUTLINE: code tự bỏ fact_ids không tồn tại và IG không kiểm chứng được rồi đi tiếp, thay vì vòng revise (mỗi vòng 10–20 phút)
+  outline_autofix: true
+  # RUBRIC: hết vòng sửa mà vẫn trượt → proceed (ghi Warnings) | human. Tiêu chí blocking = 0 → automation.quality_rewinds
+  rubric_fail_after_fix: proceed
+  # FACT_SIGNOFF: claim không xác minh được / mâu thuẫn nguồn → remove (xoá câu chứa claim) | human
+  fact_unverified: remove
+  ymyl_final_human: false
+  audit_sample_rate: 0.10
+  auto_rollback_error_rate: 0.05
+  needs_human_remind_hours: 48   # spec lệch: bảng state ghi 3 ngày, §7 ghi 48h — chọn 48h
+  needs_human_stale_days: 14
+  mode:   # auto | shadow | human — hệ thống chạy không người: mọi gate auto (shadow/human sẽ bị autopilot duyệt thay)
+    triage: auto
+    kw: auto
+    fact: auto
+    outline: auto
+    title: auto        # chỉ luật cứng của code
+    qa: auto
+    fact_signoff: auto
+    final: auto
+  revise_max: {kw: 1, fact: 1, outline: 2, rework: 2}   # gate không có key → revise = escalate
+  checklist:           # §4.5; AI trả lời YES/NO cho từng mục, có NO thì không được approve
+    kw:
+      - {check_id: KW1, question: "Keyword primary đúng ý định tìm kiếm chính của chủ đề?"}
+      - {check_id: KW2, question: "Không có hai keyword cùng ý định cùng là secondary cho một section?"}
+      - {check_id: KW3, question: "Các keyword chuyen_trang_khac thật sự nên có trang riêng?"}
+      - {check_id: KW4, question: "questions_for_human rỗng, hoặc không câu nào ảnh hưởng tới việc chọn primary/secondary cho chính bài này? (câu hỏi về chiến lược nội dung của site không tính)"}
+    fact:
+      - {check_id: F1, question: "Mỗi claim có action hợp lý với nội dung của nó?"}
+      - {check_id: F2, question: "Claim có năm, giá, luật đã cũ đều được CAP_NHAT hoặc XAC_MINH?"}
+      - {check_id: F3, question: "Không có claim YMYL nào để GIU khi thiếu nguồn?"}
+    outline:
+      - {check_id: O1, question: "Outline trả lời ý định tìm kiếm chính?"}
+      - {check_id: O2, question: "Có ít nhất 2 IG dùng dữ liệu thật (mục kho hoặc new_claim đã kiểm chứng)?"}
+      - {check_id: O3, question: "Không section nào chỉ gồm nội dung commodity?"}
+      - {check_id: O4, question: "Câu hỏi PAA thuộc ý định của bài này đều có section trả lời? (không tính PAA ứng với keyword_trang_rieng hoặc bị loại trong huong_dan_bien_tap)"}
+    qa:
+      - {check_id: Q1, question: "Các edit của P7b/P9 không làm đổi nghĩa câu gốc?"}
+      - {check_id: Q2, question: "Kết quả override của code không bị bỏ qua?"}
+      - {check_id: Q3, question: "Không có dấu hiệu bịa trải nghiệm ngoài author_evidence?"}
+    fact_signoff:
+      - {check_id: FS1, question: "Mỗi nguồn đúng tier đã ghi?"}
+      - {check_id: FS2, question: "Câu trích (quote) thật sự hỗ trợ claim?"}
+      - {check_id: FS3, question: "current_value lấy từ nguồn mới nhất?"}
+    final:
+      - {check_id: FN1, question: "Đoạn mở và câu đầu mỗi H2 trả lời trực tiếp?"}
+      - {check_id: FN2, question: "Mọi IG có nội dung thật, khớp mục kho?"}
+      - {check_id: FN3, question: "Title, meta, slug khớp nội dung bài?"}
+      - {check_id: FN4, question: "Không có nội dung nhạy cảm cần người xem?"}
+knowledge:
+  candidates_per_ig: 8
+  max_reuse_per_entry: 5
+  expiry_reminder_days: 30
+  score_weights: {tag: 0.4, fulltext: 0.3, vector: 0.3}
+modes:
+  lite: {steps_skip: [P2b, P3, P8b], p4: data_only, max_entries: 3}
+  standard: {p4: grounded, max_entries: 6}
+  heavy: {p4: grounded_plus_deep_research, writer_mode: section_by_section, max_entries: 10}
+blacklist:   # max_per_article mặc định: high 0, medium 2
+  high: ["Trong thời đại công nghệ 4.0", "Tóm lại", "đóng vai trò vô cùng quan trọng", "Hy vọng bài viết đã mang đến", "đóng vai trò then chốt", "không thể phủ nhận", "yếu tố cốt lõi", "Nhiều chuyên gia cho rằng"]
+  high_patterns: [{re: "không chỉ .{1,60}? mà còn", max_per_article: 1}, {re: "không phải .{1,40}? mà là", max_per_article: 1}]
+  medium: ["hoàn hảo", "vượt trội", "đột phá", "Hãy cùng tìm hiểu"]
+  medium_sentence_openers: {words: ["Bên cạnh đó", "Ngoài ra", "Đặc biệt", "Hơn nữa"], max_per_article: 2}
+  medium_patterns: ["Vậy .{1,40} là gì\\?"]
+  whitelist: []   # ví dụ tên sản phẩm có chữ "vượt trội"
+adapters:
+  # SERP nhập tay trong JobInput luôn được ưu tiên; không có thì dùng provider này (manual = bắt buộc nhập tay)
+  serp: {provider: serper, serper: {api_key_env: SERPER_API_KEY, gl: vn, hl: vi, num: 10}}
+  # job.yaml `auto_source: N`: nhánh B tự lấy N trang top SERP làm tư liệu (chỉ để trích claim, xoá sau FACT_GATE)
+  auto_source:
+    max_sources: 5
+    min_chars: 1500              # trang ngắn hơn (trang danh mục, bị chặn) thì bỏ, lấy trang kế tiếp
+    max_chars_per_source: 12000  # ~2.500 chữ mỗi nguồn
+    block_domains: [youtube.com, facebook.com, tiktok.com, instagram.com, x.com, twitter.com, pinterest.com, shopee.vn, lazada.vn]
+    block_url_patterns: ['soi-?keo', 'keo-?nha-?cai', 'nha-?cai', 'ca-?cuoc', 'casino', 'xoilac', 'ty-?le-?keo', '(^|[.-])(bet|w88|fb88|789bet|188bet|new88|jun88)', 'bf365',
+                         'cakhia', 'socolive', 'mitom', 'vebo', '90phut', 'thapcam', 'bunchatv', 'colatv', 'rakhoi', 'xoi-?lac',
+                         'tructiep(bongda)?[^/]*\\.(xyz|live|tv|club|site|online|pro|link)', 'bongda[^/]*\\.(xyz|live|tv|club|site|online|pro|link)']
+    # Nội dung: trang nhắc ≥ block_text_min_hits mục khác nhau dưới đây thì bỏ (trang lậu/nhà cái chạy domain lạ)
+    block_text_patterns: ['xôi ?lạc', 'xoilac', 'cà ?khịa', 'cakhia', 'socolive', 'mì ?tôm', 'vebo', 'thập cẩm', 'rakhoi',
+                          'nhà cái', 'cá cược', 'tỷ lệ kèo', 'soi kèo', 'casino', 'nạp tiền', 'khuyến mãi nạp', 'link vào']
+    block_text_min_hits: 2
+  plagiarism: {internal_shingle: true, copyleaks: false, copyscape: false}
+  gsc: {mode: csv}
+  indexnow: false
+  cms: {provider: none, publish_status: draft, max_posts_per_week: 10}   # none = chỉ xuất FinalPackage
+cost:
+  cap_usd_per_job: {lite: 1.5, standard: 3.0, heavy: 6.0, rework: 0.5}
+  monthly_cap_usd: 300   # tổng prompt_runs.cost_usd từ đầu tháng ≥ mức này → mọi job dừng (PAUSED_BUDGET); null = tắt
+  use_batch_when_not_urgent: true
+concurrency: {anthropic: 4, openai: 4, gemini: 4}
+retention: {raw_responses_days: 90, source_text: until_fact_gate}   # nhánh B: xóa text nguồn khi FACT_GATE approve, giữ tập hash 5-gram
+# Debug: lưu toàn văn prompt mỗi lượt gọi model (prompt_runs.request_redacted.prompt_uri → blob).
+# Lưu ý ADR-6: prompt P2a/P2b nhánh B chứa text bài nguồn, blob này KHÔNG bị xoá khi FACT_GATE approve.
+debug: {save_prompts: true}
+# Chạy không người: job không bao giờ nằm lại ở NEEDS_HUMAN (pipeline/autopilot.py)
+automation:
+  enabled: true
+  rerun_backoff_seconds: [60, 300, 900, 1800]   # lỗi (model trả sai, extension lỗi…) → chạy lại bước, giãn dần
+  # Số lần chạy lại LIÊN TIẾP tối đa cho một bước; hết lượt thì job dừng ở NEEDS_HUMAN (xem last_error trên UI,
+  # chạy tiếp bằng `run_job.py --resume <job_id>`). null = không giới hạn (lỗi không tự hết sẽ lặp mãi).
+  rerun_max: 6
+  gate_rewinds_max: 2          # gate escalate → gửi về bước tạo artifact kèm lý do; hết lượt thì đi tiếp (ghi Warnings)
+  # RUBRIC hết vòng sửa mà tiêu chí blocking = 0 → quay về bước gốc gây lỗi (có feedback) thay vì đi tiếp bài dở
+  quality_rewinds_max: 2
+  min_facts_for_write: 6       # accuracy = 0 mà fact đã duyệt ít hơn số này → lỗi ở khâu lấy dữ kiện, không phải khâu viết
+worker: {lease_seconds: 120,   # được gia hạn mỗi lease/4 trong lúc chạy; worker chết thì job nhận lại sau ≤2 phút
+          max_attempts: 3, retry_backoff_seconds: [30, 120, 600]}
+blob_dir: var/blobs

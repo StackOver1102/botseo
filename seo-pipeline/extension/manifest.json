@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "SEO Pipeline Bridge",
+  "version": "0.2.2",
+  "description": "Lấy prompt từ SEO pipeline, chạy trên ChatGPT / Gemini web và gửi kết quả về.",
+  "permissions": ["storage", "alarms", "tabs", "cookies"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://*.google.com/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content/common.js", "content/chatgpt.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["content/common.js", "content/gemini.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options/options.html",
+  "action": { "default_title": "SEO Pipeline Bridge", "default_popup": "options/options.html" }
+}

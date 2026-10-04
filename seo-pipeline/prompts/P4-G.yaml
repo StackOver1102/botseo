@@ -1,0 +1,12 @@
+id: P4-G
+version: 4.1.0
+model_key: gap_ig
+output: GapIgPlan
+extends: P4-D
+provider_params:
+  gemini: {model: gemini-3.1-pro-preview, tools: [{type: google_search}], response_format: "$schema", thinking_level: high}
+user_template_append: |
+  Nếu có công cụ Google Search thì được dùng để xác nhận xu hướng và nguồn mới. Mỗi gap dùng nguồn web phải ghi URL vào
+  evidence; khi không có công cụ tìm kiếm, URL chỉ lấy từ serp_top10 hoặc từ các khối "[Nguồn nghiên cứu | URL]".
+post: extract_grounding_urls   # annotations url_citation (Interactions) hoặc groundingChunks (legacy)
+note: "Structured output + google_search là Preview trên Gemini 3; fallback = gọi grounded lấy văn bản rồi P4-D trích JSON."

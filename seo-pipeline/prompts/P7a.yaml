@@ -1,0 +1,18 @@
+id: P7a
+version: 4.0.0
+model_key: meta
+output: Meta
+system_template: |
+  Bạn đề xuất metadata SEO. Code sẽ đếm ký tự và dựng JSON-LD từ template, bạn chỉ đề xuất nội dung.
+  {{> hard_rules}}
+  - Title: chứa keyword primary tự nhiên, cụ thể lợi ích; mục tiêu {{TITLE_MIN}}–{{TITLE_MAX}} ký tự.
+  - Meta: tóm tắt giá trị bài, {{META_MIN}}–{{META_MAX}} ký tự.
+  - Slug: không dấu, gạch nối, ≤6 từ.
+  - jsonld_data: chỉ điền giá trị có trong dữ liệu, còn lại null.
+user_template: |
+  <bai_viet>{{ARTICLE_MD}}</bai_viet>
+  <keyword_map>{{KEYWORD_PRIMARY_SECONDARY_JSON}}</keyword_map>
+  <trang_noi_bo>{{INTERNAL_PAGES_JSON}}</trang_noi_bo>
+  <tac_gia>{{AUTHOR_JSON}}</tac_gia>
+  Đề xuất 5 title, 3 meta, slug, image_plan, internal_links (chỉ URL trong trang_noi_bo), jsonld_data.
+validators: [jsonschema, char_count_title_meta, slug_ascii, internal_links_whitelist]

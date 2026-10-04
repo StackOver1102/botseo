@@ -1,0 +1,13 @@
+id: P11
+version: 4.0.0
+model_key: changelog
+output: markdown
+system_template: |
+  Bạn viết nhật ký thay đổi cho biên tập viên từ dữ liệu diff do code tạo. Gói cuối do code lắp ráp.
+  {{> hard_rules}}
+user_template: |
+  <diff_tom_tat>{{DIFF_SUMMARY_JSON}}</diff_tom_tat>
+  <fact_changes>{{FACT_CHANGES_JSON}}</fact_changes>
+  <qa_summary>{{RUBRIC_JSON}}</qa_summary>
+  Viết change log Markdown: 5–10 gạch đầu dòng, nhóm theo Nội dung / Số liệu / SEO / Việc còn lại cho người. Chỉ nêu điều có trong dữ liệu.
+validators: [markdown_nonempty, no_new_numbers]

@@ -1,0 +1,1369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "job_id",
+        "kind",
+        "created_at",
+        "payload"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "KeywordMap",
+            "FactInventory",
+            "VoiceProfile",
+            "GapIgPlan",
+            "KnowledgeSelection",
+            "AuthorEvidence",
+            "ArticleDraft",
+            "Meta",
+            "Edits",
+            "Verdict",
+            "FactCheck",
+            "TriageSuggestion",
+            "PreflightIssues",
+            "RubricResult",
+            "GateReview",
+            "FinalPackage"
+          ]
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "TriageSuggestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch_suggest",
+        "ymyl",
+        "mode_suggest",
+        "evidence"
+      ],
+      "properties": {
+        "branch_suggest": {
+          "enum": [
+            "A",
+            "B"
+          ]
+        },
+        "ymyl": {
+          "type": "boolean"
+        },
+        "mode_suggest": {
+          "enum": [
+            "lite",
+            "standard",
+            "heavy"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "KeywordMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rows",
+        "entities",
+        "questions_for_human"
+      ],
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "keyword_nfc",
+              "display",
+              "key_khongdau",
+              "intent",
+              "cluster",
+              "role",
+              "section",
+              "volume",
+              "note"
+            ],
+            "properties": {
+              "keyword_nfc": {
+                "type": "string"
+              },
+              "display": {
+                "type": "string"
+              },
+              "key_khongdau": {
+                "type": "string"
+              },
+              "intent": {
+                "enum": [
+                  "thong_tin",
+                  "thuong_mai",
+                  "giao_dich",
+                  "dieu_huong",
+                  "can_kiem_serp"
+                ]
+              },
+              "cluster": {
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "primary",
+                  "secondary",
+                  "chuyen_trang_khac",
+                  "bo",
+                  "thuong_hieu_doi_thu"
+                ]
+              },
+              "section": {
+                "type": "string"
+              },
+              "volume": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "questions_for_human": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "FactInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claims"
+      ],
+      "properties": {
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claim_id",
+              "verbatim",
+              "type",
+              "in_article_source",
+              "maybe_outdated",
+              "outdated_reason",
+              "action",
+              "new_value",
+              "verification_source",
+              "status",
+              "origin"
+            ],
+            "properties": {
+              "claim_id": {
+                "type": "string"
+              },
+              "verbatim": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "so_lieu",
+                  "ten_rieng",
+                  "ngay",
+                  "gia",
+                  "luat",
+                  "link",
+                  "khuyen_nghi",
+                  "trich_dan",
+                  "trai_nghiem"
+                ]
+              },
+              "in_article_source": {
+                "type": "string"
+              },
+              "maybe_outdated": {
+                "type": "boolean"
+              },
+              "outdated_reason": {
+                "type": "string"
+              },
+              "action": {
+                "enum": [
+                  "GIU",
+                  "CAP_NHAT",
+                  "XAC_MINH",
+                  "BO"
+                ]
+              },
+              "new_value": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "verification_source": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "CHUA_DUYET",
+                  "DA_DUYET",
+                  "BO"
+                ]
+              },
+              "origin": {
+                "enum": [
+                  "bai_goc",
+                  "bai_nguon",
+                  "kho_tac_gia",
+                  "nghien_cuu_b4"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "VoiceProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimensions",
+        "positive_exemplars",
+        "negative_exemplars_qa_only",
+        "checklist_qa"
+      ],
+      "properties": {
+        "dimensions": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dim_id",
+              "name",
+              "description",
+              "evidence_quotes",
+              "status"
+            ],
+            "properties": {
+              "dim_id": {
+                "enum": [
+                  "D1",
+                  "D2",
+                  "D3",
+                  "D4",
+                  "D5",
+                  "D6",
+                  "D7",
+                  "D8",
+                  "D9",
+                  "D10"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "evidence_quotes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "status": {
+                "enum": [
+                  "DU_MAU",
+                  "KHONG_DU_MAU"
+                ]
+              }
+            }
+          }
+        },
+        "positive_exemplars": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "function",
+              "quote"
+            ],
+            "properties": {
+              "function": {
+                "enum": [
+                  "mo_bai",
+                  "giai_thich",
+                  "vi_du",
+                  "chuyen_y",
+                  "ket_bai"
+                ]
+              },
+              "quote": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "negative_exemplars_qa_only": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checklist_qa": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "check_id",
+              "question"
+            ],
+            "properties": {
+              "check_id": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "GapIgPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage",
+        "dominant_format",
+        "commodity",
+        "gaps",
+        "ig",
+        "outline",
+        "new_claims"
+      ],
+      "properties": {
+        "coverage": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "url",
+              "subtopics"
+            ],
+            "properties": {
+              "url": {
+                "type": "string"
+              },
+              "subtopics": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "dominant_format": {
+          "type": "string"
+        },
+        "commodity": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gap",
+              "evidence"
+            ],
+            "properties": {
+              "gap": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "ig": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ig_id",
+              "type",
+              "description",
+              "owner",
+              "inputs_needed",
+              "placement"
+            ],
+            "properties": {
+              "ig_id": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "du_lieu_rieng",
+                  "trai_nghiem",
+                  "vi_du_goc",
+                  "so_sanh",
+                  "cong_cu",
+                  "quan_diem_chuyen_gia"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "owner": {
+                "enum": [
+                  "AI",
+                  "KHO_TAC_GIA"
+                ]
+              },
+              "inputs_needed": {
+                "type": "string"
+              },
+              "placement": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "new_claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "verbatim",
+              "source_url",
+              "section_id",
+              "type",
+              "ig_id"
+            ],
+            "properties": {
+              "verbatim": {
+                "type": "string"
+              },
+              "source_url": {
+                "type": "string"
+              },
+              "section_id": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "so_lieu",
+                  "ten_rieng",
+                  "ngay",
+                  "gia",
+                  "luat",
+                  "link",
+                  "khuyen_nghi",
+                  "trich_dan",
+                  "trai_nghiem"
+                ]
+              },
+              "ig_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "outline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "section_id",
+              "level",
+              "heading",
+              "keywords",
+              "fact_ids",
+              "ig_ids"
+            ],
+            "properties": {
+              "section_id": {
+                "type": "string"
+              },
+              "level": {
+                "enum": [
+                  2,
+                  3
+                ]
+              },
+              "heading": {
+                "type": "string"
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "ig_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "source_sections": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "KnowledgeSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selections",
+        "unfilled_ig_ids"
+      ],
+      "properties": {
+        "selections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ig_id",
+              "entry_id",
+              "excerpt",
+              "fit_reason",
+              "confidence"
+            ],
+            "properties": {
+              "ig_id": {
+                "type": "string"
+              },
+              "entry_id": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              },
+              "fit_reason": {
+                "type": "string"
+              },
+              "confidence": {
+                "enum": [
+                  "cao",
+                  "trung_binh",
+                  "thap"
+                ]
+              }
+            }
+          }
+        },
+        "unfilled_ig_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "AuthorEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "entry_id",
+              "ig_id",
+              "kind",
+              "content",
+              "facts"
+            ],
+            "properties": {
+              "entry_id": {
+                "type": "string"
+              },
+              "ig_id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "facts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "label",
+                    "value",
+                    "unit",
+                    "as_of"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "GateReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate",
+        "checks",
+        "decision",
+        "confidence",
+        "revise_instructions",
+        "escalate_reason"
+      ],
+      "properties": {
+        "gate": {
+          "enum": [
+            "TRIAGE",
+            "KW",
+            "FACT",
+            "OUTLINE",
+            "QA",
+            "FACT_SIGNOFF",
+            "FINAL"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "check_id",
+              "evidence",
+              "verdict"
+            ],
+            "properties": {
+              "check_id": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              },
+              "verdict": {
+                "enum": [
+                  "YES",
+                  "NO"
+                ]
+              }
+            }
+          }
+        },
+        "decision": {
+          "enum": [
+            "approve",
+            "revise",
+            "escalate"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "revise_instructions": {
+          "type": "string"
+        },
+        "escalate_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "ArticleDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "body_markdown",
+        "keyword_placement",
+        "can_nguoi",
+        "change_log"
+      ],
+      "properties": {
+        "body_markdown": {
+          "type": "string"
+        },
+        "keyword_placement": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "keyword",
+              "section_id"
+            ],
+            "properties": {
+              "keyword": {
+                "type": "string"
+              },
+              "section_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "can_nguoi": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "section_id",
+              "placeholder"
+            ],
+            "properties": {
+              "section_id": {
+                "type": "string"
+              },
+              "placeholder": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "change_log": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "titles",
+        "metas",
+        "slug",
+        "image_plan",
+        "internal_links",
+        "jsonld_data"
+      ],
+      "properties": {
+        "titles": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "string"
+          }
+        },
+        "metas": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "string"
+          }
+        },
+        "slug": {
+          "type": "string"
+        },
+        "image_plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "section_id",
+              "idea",
+              "alt"
+            ],
+            "properties": {
+              "section_id": {
+                "type": "string"
+              },
+              "idea": {
+                "type": "string"
+              },
+              "alt": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "internal_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "anchor",
+              "target_url",
+              "section_id"
+            ],
+            "properties": {
+              "anchor": {
+                "type": "string"
+              },
+              "target_url": {
+                "type": "string"
+              },
+              "section_id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "jsonld_data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "headline",
+            "author_name",
+            "author_url",
+            "date_published",
+            "date_modified",
+            "breadcrumb"
+          ],
+          "properties": {
+            "headline": {
+              "type": "string"
+            },
+            "author_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "author_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "date_published": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "date_modified": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "breadcrumb": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "url"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Edits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edits"
+      ],
+      "properties": {
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "check_id",
+              "error_type",
+              "find",
+              "replace",
+              "reason"
+            ],
+            "properties": {
+              "check_id": {
+                "type": "string"
+              },
+              "error_type": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              "find": {
+                "type": "string"
+              },
+              "replace": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass_id",
+        "items",
+        "blocking_fail"
+      ],
+      "properties": {
+        "pass_id": {
+          "enum": [
+            "P8a",
+            "P8b",
+            "P8c",
+            "P8d"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "check_id",
+              "evidence",
+              "verdict",
+              "severity",
+              "fix_hint",
+              "location"
+            ],
+            "properties": {
+              "check_id": {
+                "type": "string"
+              },
+              "evidence": {
+                "type": "string"
+              },
+              "verdict": {
+                "enum": [
+                  "YES",
+                  "NO"
+                ]
+              },
+              "severity": {
+                "enum": [
+                  "chan",
+                  "cao",
+                  "trung_binh",
+                  "thap"
+                ]
+              },
+              "fix_hint": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "blocking_fail": {
+          "type": "boolean"
+        }
+      }
+    },
+    "FactCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claim_id",
+              "atomic_claim",
+              "verdict",
+              "current_value",
+              "sources",
+              "conflict_note",
+              "suggested_action"
+            ],
+            "properties": {
+              "claim_id": {
+                "type": "string"
+              },
+              "atomic_claim": {
+                "type": "string"
+              },
+              "verdict": {
+                "enum": [
+                  "DUNG",
+                  "SAI",
+                  "CAN_CAP_NHAT",
+                  "MAU_THUAN",
+                  "KHONG_XAC_MINH_DUOC"
+                ]
+              },
+              "current_value": {
+                "type": "string"
+              },
+              "sources": {
+                "type": "array",
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "url",
+                    "date",
+                    "quote",
+                    "tier"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "quote": {
+                      "type": "string"
+                    },
+                    "tier": {
+                      "enum": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                      ]
+                    }
+                  }
+                }
+              },
+              "conflict_note": {
+                "type": "string"
+              },
+              "suggested_action": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "PreflightIssues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issues"
+      ],
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "where",
+              "quote",
+              "blocking"
+            ],
+            "properties": {
+              "type": {
+                "enum": [
+                  "mau_thuan",
+                  "thieu_du_lieu",
+                  "claim_chua_duyet",
+                  "ig_khong_nguon",
+                  "keyword_xung_dot",
+                  "khac"
+                ]
+              },
+              "where": {
+                "type": "string"
+              },
+              "quote": {
+                "type": "string"
+              },
+              "blocking": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RubricResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scores",
+        "total",
+        "pass",
+        "blocking_zero",
+        "report_md"
+      ],
+      "properties": {
+        "scores": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "criterion",
+              "score",
+              "blocking",
+              "sources"
+            ],
+            "properties": {
+              "criterion": {
+                "enum": [
+                  "intent",
+                  "information_gain",
+                  "accuracy",
+                  "uniqueness",
+                  "eeat",
+                  "voice",
+                  "seo_onpage",
+                  "geo_readiness",
+                  "readability"
+                ]
+              },
+              "score": {
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  null
+                ]
+              },
+              "blocking": {
+                "type": "boolean"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "total": {
+          "type": "integer"
+        },
+        "pass": {
+          "type": "boolean"
+        },
+        "blocking_zero": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "report_md": {
+          "type": "string"
+        }
+      }
+    },
+    "FinalPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "article_markdown",
+        "title",
+        "meta",
+        "slug",
+        "jsonld",
+        "image_plan",
+        "internal_links",
+        "fact_table",
+        "rubric",
+        "change_log_md",
+        "open_placeholders",
+        "approvals"
+      ],
+      "properties": {
+        "article_markdown": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "jsonld": {
+          "type": "object"
+        },
+        "image_plan": {
+          "type": "array"
+        },
+        "internal_links": {
+          "type": "array"
+        },
+        "fact_table": {
+          "type": "array"
+        },
+        "rubric": {
+          "type": "object"
+        },
+        "change_log_md": {
+          "type": "string"
+        },
+        "open_placeholders": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ReworkBrief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ymyl",
+        "ymyl_reason",
+        "primary_keyword",
+        "keywords"
+      ],
+      "properties": {
+        "ymyl": {
+          "type": "boolean"
+        },
+        "ymyl_reason": {
+          "type": "string"
+        },
+        "primary_keyword": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+id: P1
+version: 5.0.0
+model_key: keyword_map
+output: KeywordMap
+system_template: |
+  Bạn là chuyên viên SEO tiếng Việt, phân vai trò cho danh sách từ khóa đã được chuẩn hóa bằng code.
+  {{> hard_rules}}
+  - Giữ nguyên mọi dòng đầu vào và giá trị volume — số liệu lấy từ công cụ, bạn không có nguồn để sửa. Không có volume thì để null.
+  - Đúng một dòng role = primary — trang chỉ nhắm một ý định chính.
+  - Ý định không rõ nếu chưa xem SERP thì ghi intent = can_kiem_serp.
+  - Từ khóa nên có trang riêng thì role = chuyen_trang_khac; tên thương hiệu đối thủ thì thuong_hieu_doi_thu.
+  - Không có người trả lời câu hỏi: tự quyết định (vai trò, section, tách trang) và ghi lý do ngắn vào note.
+    questions_for_human chỉ dùng khi thiếu thông tin đến mức không chọn được keyword primary; bình thường để rỗng.
+    Không hỏi về chiến lược nội dung của site (tách trang, thêm danh sách thương hiệu…) — đó không phải việc của bước này.
+  Ví dụ: "vay tiền online" (primary, giao_dich); "vay tiền online có an toàn không" (secondary, thong_tin, section "Rủi ro"); "app vay X" (thuong_hieu_doi_thu).
+user_template: |
+  <chu_de>{{TOPIC}}</chu_de>
+  <bai_hien_tai_tom_tat>{{ARTICLE_OUTLINE_OR_NULL}}</bai_hien_tai_tom_tat>
+  <tu_khoa_da_chuan_hoa>{{KEYWORD_ROWS_JSON}}</tu_khoa_da_chuan_hoa>
+  Gán intent, cluster, role, section, note cho từng dòng; liệt kê entities chính; questions_for_human để rỗng trừ khi không chọn được primary.
+  Trả về số dòng bằng đúng số dòng đầu vào ({{ROW_COUNT}}).
+validators: [jsonschema, kw_row_reconcile, single_primary, volume_equals_input]

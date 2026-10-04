@@ -1,0 +1,33 @@
+id: P6-A
+version: 1.2.0
+model_key: writer
+output: ArticleDraft
+extends: P6-S
+provider_params:
+  anthropic: {max_tokens: 8000, output_config: {effort: medium, format: "$ArticleDraft"}}
+user_template: |
+  <voice_profile>{{VOICE_PROFILE_POSITIVE_JSON}}</voice_profile>
+  <fact_inventory_da_duyet>{{APPROVED_FACTS_JSON}}</fact_inventory_da_duyet>
+  <author_evidence>{{AUTHOR_EVIDENCE_JSON}}</author_evidence>
+  <keyword_map>{{KEYWORD_PRIMARY_SECONDARY_JSON}}</keyword_map>
+  <tu_can_tranh>{{BLACKLIST_HIGH_LIST}}</tu_can_tranh>
+  <ig_cua_section>{{IG_JSON}}</ig_cua_section>
+  <section_hien_tai>{{SECTION_JSON}}</section_hien_tai>
+  <ban_goc_cua_section>
+  {{ORIGINAL_SECTION_MD}}
+  </ban_goc_cua_section>
+  <tom_tat_da_viet>{{PREVIOUS_SECTIONS_SUMMARY}}</tom_tat_da_viet>
+  Đây là bài LÀM MỚI một bài có sẵn của chính site. Viết section {{SECTION_ID}} ("{{HEADING}}") cùng các H3 con trong
+  section_hien_tai, mở đầu bằng <!-- {{SECTION_ID}} --> rồi heading H2 đúng như outline.
+  - Có ban_goc_cua_section: giữ ĐỦ mọi ý của đoạn gốc nhưng viết lại bằng câu chữ mới (không giữ chuỗi >5 từ liên tiếp
+    của bản gốc, trừ tên riêng, số liệu, thuật ngữ, keyword). Số liệu/ngày/giá: dùng giá trị trong fact_inventory_da_duyet
+    (claim có new_value là giá trị đã cập nhật — thay số cũ bằng số mới); claim bị loại khỏi fact thì bỏ ý đó.
+  - Có ig_cua_section: thêm nội dung cụ thể cho IG đó (bảng, danh sách, bước làm) dựng từ fact đã duyệt.
+  - Section không có bản gốc (section mới): viết mới từ fact và IG.
+  - ban_goc_cua_section có thể gồm nhiều mục gốc (đánh dấu [Mục gốc: …]): đó là nhãn, không phải heading — gộp nội dung
+    các mục đó thành MỘT mạch văn liền dưới heading của section_hien_tai (và các H3 con nếu có), không lặp lại ý đã viết,
+    không mở đoạn bằng "..." hay "…". Chỉ dùng heading của section_hien_tai, mỗi heading đúng một lần.
+  - Độ dài section khoảng {{SECTION_TARGET_WORDS}} chữ, không ngắn hơn đoạn gốc ({{ORIGINAL_WORDS}} chữ).
+  - Nối mạch với phần trước, không lặp ý đã có trong tom_tat_da_viet. Mọi số liệu phải đến từ fact_inventory_da_duyet.
+  keyword_placement, can_nguoi, change_log chỉ ghi cho section này. Không viết placeholder [CẦN NGƯỜI…].
+note: "Nhánh A (bài của chính site, không vướng ADR-6): writer thấy đoạn gốc của section để không làm mất ý; code kiểm tra độ dài và độ trùng từng section."

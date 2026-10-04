@@ -1,0 +1,1052 @@
+diff --git a/internal/modules/providers/deep_research.go b/internal/modules/providers/deep_research.go
+index a5cf1c6..0e64de1 100644
+--- a/internal/modules/providers/deep_research.go
++++ b/internal/modules/providers/deep_research.go
+@@ -303,6 +303,13 @@ func (c *Client) DeepResearch(ctx context.Context, query string, opts ...DeepRes
+ 		opt(cfg)
+ 	}
+ 
++	// Gemini's own Deep Research tool is the default. The emulated chain below
++	// remains for GEMINI_DEEP_RESEARCH_MODE=emulated and for requests with
++	// attached images, which the native flow does not carry yet.
++	if deepResearchMode() == DeepResearchModeNative && len(cfg.InputFiles) == 0 {
++		return c.deepResearchNative(ctx, query, cfg, nil)
++	}
++
+ 	startTime := time.Now()
+ 	createdAt := startTime.Unix()
+ 
+@@ -433,6 +440,22 @@ func (c *Client) DeepResearchStream(ctx context.Context, query string, cb Progre
+ 		opt(cfg)
+ 	}
+ 
++	if deepResearchMode() == DeepResearchModeNative && len(cfg.InputFiles) == 0 {
++		result, err := c.deepResearchNative(ctx, query, cfg, cb)
++		if err != nil {
++			cb(DeepResearchEvent{Event: EventTypeError, Error: err.Error()})
++			return err
++		}
++		for i := range result.Sources {
++			if !cb(DeepResearchEvent{Event: EventTypeSource, Progress: 97, Source: &result.Sources[i]}) {
++				return nil
++			}
++		}
++		cb(DeepResearchEvent{Event: EventTypeResult, Message: "Research complete", Progress: 100, Result: result})
++		cb(DeepResearchEvent{Event: EventTypeDone, Message: "done", Progress: 100})
++		return nil
++	}
++
+ 	startTime := time.Now()
+ 	createdAt := startTime.Unix()
+ 
+diff --git a/internal/modules/providers/gemini_service.go b/internal/modules/providers/gemini_service.go
+index c2e2f53..4fabea0 100644
+--- a/internal/modules/providers/gemini_service.go
++++ b/internal/modules/providers/gemini_service.go
+@@ -534,6 +534,9 @@ func (c *Client) generateContent(ctx context.Context, prompt string, metadata []
+ 	if metadata != nil {
+ 		inner[2] = metadata
+ 	}
++	if config.DeepResearch {
++		applyDeepResearchFlags(inner)
++	}
+ 	modelHeaders, err := buildGeminiModelHeaders(selectedModel, requestID, generationID)
+ 	if err != nil {
+ 		return nil, err
+@@ -563,7 +566,9 @@ func (c *Client) generateContent(ctx context.Context, prompt string, metadata []
+ 	generateURL := geminiAccountURL(EndpointGenerate, c.authUser) + "?" + queryValues.Encode()
+ 
+ 	maxAttempts := c.maxRetries
+-	if maxAttempts <= 0 {
++	if maxAttempts <= 0 || config.DeepResearch {
++		// A deep research turn may already have been accepted server-side when
++		// the request fails; retrying would submit the research a second time.
+ 		maxAttempts = 1
+ 	}
+ 
+@@ -646,6 +651,19 @@ func (c *Client) generateContent(ctx context.Context, prompt string, metadata []
+ 		result, parseErr := c.parseResponse(respBody)
+ 		parseDuration := time.Since(parseStart)
+ 
++		if config.DeepResearch {
++			// Confirming a plan legitimately ends the stream without reply text,
++			// so a parse failure is not an error here: the caller reads the plan,
++			// the conversation ids and the report from the raw body instead.
++			if parseErr != nil {
++				result = &Response{Metadata: map[string]any{"parse_error": parseErr.Error()}}
++			}
++			result.RawBody = respBody
++			result.Model = selectedModel.ID
++			result.ModelID = selectedModel.ModelID
++			return result, nil
++		}
++
+ 		if parseErr != nil {
+ 			lastErr = parseErr
+ 			c.log.Warn("Failed to parse response, will retry",
+diff --git a/internal/modules/providers/provider_interface.go b/internal/modules/providers/provider_interface.go
+index 399e2a9..3e6d5ff 100644
+--- a/internal/modules/providers/provider_interface.go
++++ b/internal/modules/providers/provider_interface.go
+@@ -54,6 +54,9 @@ type Response struct {
+ 	ChosenIndex    int            `json:"chosen_index"`
+ 	ConversationID string         `json:"conversation_id,omitempty"`
+ 	ResponseID     string         `json:"response_id,omitempty"`
++	// RawBody is the unparsed StreamGenerate body. It is only kept for deep
++	// research turns, whose plan and report live outside the reply text.
++	RawBody string `json:"-"`
+ }
+ 
+ // Message represents a single message in conversation
+@@ -101,6 +104,11 @@ type GenerateConfig struct {
+ 	Temperature             float64
+ 	MaxTokens               int
+ 	DownloadGeneratedImages bool
++	// DeepResearch flags the turn as part of Gemini's native Deep Research flow
++	// (the plan turn or its confirmation). Such a turn is never sent as a
++	// temporary chat and is never retried: re-sending a confirmation would
++	// submit the research a second time.
++	DeepResearch bool
+ }
+ 
+ // InputFile is an in-memory file to upload with a generation request.
+diff --git a/internal/modules/providers/deep_research_native.go b/internal/modules/providers/deep_research_native.go
+new file mode 100644
+index 0000000..6683bbf
+--- /dev/null
++++ b/internal/modules/providers/deep_research_native.go
+@@ -0,0 +1,671 @@
++package providers
++
++// Native Deep Research: drives Gemini Web's own Deep Research tool instead of
++// emulating it with ordinary chat turns.
++//
++// The flow is the one the web UI performs, ported from gemini_webapi
++// (HanaokaYuzu/Gemini-API, components/research_mixin.py):
++//
++//  1. Send the topic as a chat turn flagged for deep research. Gemini answers
++//     with a research plan (title, steps, ETA) and waits.
++//  2. Send the confirmation turn ("Start research") in the same conversation.
++//     This is the "Start research" button; the task now runs server-side.
++//  3. Re-read the conversation until a turn carries the finished report. The
++//     report is an attached document, not reply text, and its body stays empty
++//     while the research is running.
++
++import (
++	"context"
++	crand "crypto/rand"
++	"encoding/base64"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"math/rand"
++	"net/http"
++	"net/url"
++	"os"
++	"regexp"
++	"sort"
++	"strconv"
++	"strings"
++	"time"
++
++	"github.com/google/uuid"
++	"go.uber.org/zap"
++)
++
++const (
++	// DeepResearchModeNative runs Gemini's own Deep Research tool.
++	DeepResearchModeNative = "native"
++	// DeepResearchModeEmulated runs the plan/search/synthesize chain of plain chat turns.
++	DeepResearchModeEmulated = "emulated"
++
++	deepResearchModeEnv         = "GEMINI_DEEP_RESEARCH_MODE"
++	deepResearchPollEnv         = "GEMINI_DEEP_RESEARCH_POLL_SECONDS"
++	deepResearchDebugDirEnv     = "GEMINI_DEEP_RESEARCH_DEBUG_DIR"
++	deepResearchDefaultPoll     = 20 * time.Second
++	deepResearchDefaultConfirm  = "Start research"
++	deepResearchTaskPlaceholder = "agency-placeholder-task-id"
++	listConversationTurnsRPC    = "hNvQHb"
++	maxChatReadResponseSize     = 32 << 20
++
++	// Field numbers inside a candidate's rich content block ([12]).
++	fieldCitations         = 43
++	fieldResearchPlan      = 55
++	fieldResearchPlanAlt   = 56
++	deepResearchTokenBytes = 1950 // ~2600 base64url characters, as the web client sends
++)
++
++// deepResearchMode returns the configured mode; native is the default.
++func deepResearchMode() string {
++	if strings.EqualFold(strings.TrimSpace(os.Getenv(deepResearchModeEnv)), DeepResearchModeEmulated) {
++		return DeepResearchModeEmulated
++	}
++	return DeepResearchModeNative
++}
++
++func deepResearchPollInterval() time.Duration {
++	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(deepResearchPollEnv))); err == nil && n >= 5 {
++		return time.Duration(n) * time.Second
++	}
++	return deepResearchDefaultPoll
++}
++
++// dumpResearchBody writes a raw response body to GEMINI_DEEP_RESEARCH_DEBUG_DIR
++// when that is set. Google changes this protocol without notice; the dumps are
++// what the field positions in this file are checked against. They contain the
++// conversation (prompt, plan, report) but no cookies or tokens.
++func dumpResearchBody(kind, body string) {
++	dir := strings.TrimSpace(os.Getenv(deepResearchDebugDirEnv))
++	if dir == "" || body == "" {
++		return
++	}
++	if err := os.MkdirAll(dir, 0o700); err != nil {
++		return
++	}
++	name := fmt.Sprintf("%s-%s.txt", time.Now().UTC().Format("20060102T150405.000"), kind)
++	_ = os.WriteFile(dir+string(os.PathSeparator)+name, []byte(body), 0o600)
++}
++
++// applyDeepResearchFlags marks a StreamGenerate request as a deep research turn.
++func applyDeepResearchFlags(inner []interface{}) {
++	token := make([]byte, deepResearchTokenBytes)
++	_, _ = crand.Read(token)
++	inner[3] = "!" + base64.RawURLEncoding.EncodeToString(token)
++	inner[4] = strings.ReplaceAll(uuid.NewString(), "-", "")
++	inner[45] = nil // research cannot run in a temporary chat: the report is read back from history
++	inner[49] = 1
++	inner[54] = []interface{}{[]interface{}{[]interface{}{[]interface{}{[]interface{}{1}}}}}
++	inner[55] = []interface{}{[]interface{}{1}}
++}
++
++// nativeResearchPlan is the plan Gemini proposes before it starts researching.
++type nativeResearchPlan struct {
++	Title         string
++	Steps         []string
++	ETA           string
++	ConfirmPrompt string
++}
++
++// nativeResearchDocument is the report a research turn attaches to its reply.
++type nativeResearchDocument struct {
++	ID      string
++	Title   string
++	Content string
++	Sources []SourceInfo
++}
++
++// researchTurn is what one model turn of a research conversation carries.
++type researchTurn struct {
++	Text     string
++	Plan     *nativeResearchPlan
++	Document *nativeResearchDocument
++	Status   int // candidate[8][0]: 1 = still running, 2 = finished
++}
++
++// researchConversation tracks the ids needed to continue and re-read a chat.
++// Metadata mirrors the 10-slot list Gemini expects at inner[2]:
++// [cid, rid, rcid, _, _, _, _, _, _, context].
++type researchConversation struct {
++	Metadata []interface{}
++}
++
++func newResearchConversation() *researchConversation {
++	return &researchConversation{Metadata: []interface{}{"", "", "", nil, nil, nil, nil, nil, nil, ""}}
++}
++
++func (r *researchConversation) cid() string {
++	s, _ := r.Metadata[0].(string)
++	return s
++}
++
++// merge keeps existing ids when a frame leaves a slot empty.
++func (r *researchConversation) merge(values []interface{}) {
++	for i, v := range values {
++		if i >= len(r.Metadata) || v == nil {
++			continue
++		}
++		if s, ok := v.(string); ok && s == "" {
++			continue
++		}
++		r.Metadata[i] = v
++	}
++}
++
++// ---------------------------------------------------------------------------
++// JSPB helpers
++// ---------------------------------------------------------------------------
++
++// nested walks a decoded JSON array by index and returns nil when the path ends early.
++func nested(data any, path ...int) any {
++	current := data
++	for _, index := range path {
++		list, ok := current.([]interface{})
++		if !ok || index < 0 || index >= len(list) {
++			return nil
++		}
++		current = list[index]
++	}
++	return current
++}
++
++func nestedString(data any, path ...int) string {
++	s, _ := nested(data, path...).(string)
++	return s
++}
++
++func isEmptyJSPB(v any) bool {
++	switch value := v.(type) {
++	case nil:
++		return true
++	case []interface{}:
++		return len(value) == 0
++	case map[string]interface{}:
++		return len(value) == 0
++	}
++	return false
++}
++
++// jspbField reads field index of a JSPB array from its positional slot or, for
++// sparse high-numbered fields, from the trailing object keyed by the one-based
++// field number (positional 55 appears as key "56").
++func jspbField(container any, index int) any {
++	list, ok := container.([]interface{})
++	if !ok || len(list) == 0 {
++		return nil
++	}
++	var value any
++	if index >= 0 && index < len(list) {
++		value = list[index]
++	}
++	if _, isBundle := value.(map[string]interface{}); isEmptyJSPB(value) || isBundle {
++		value = nil
++		if bundle, ok := list[len(list)-1].(map[string]interface{}); ok {
++			value = bundle[strconv.Itoa(index+1)]
++		}
++	}
++	if isEmptyJSPB(value) {
++		return nil
++	}
++	return value
++}
++
++// decodeFrames returns every payload (the JSON string at [2] of an envelope)
++// found in a StreamGenerate or batchexecute body, optionally filtered by RPC id.
++func decodeFrames(body, rpcID string) []any {
++	var payloads []any
++	for _, line := range strings.Split(body, "\n") {
++		line = strings.TrimPrefix(strings.TrimSpace(line), ")]}'")
++		if !strings.HasPrefix(line, "[") {
++			continue
++		}
++		var root []interface{}
++		if err := json.Unmarshal([]byte(line), &root); err != nil {
++			continue
++		}
++		for _, item := range root {
++			envelope, ok := item.([]interface{})
++			if !ok || len(envelope) < 3 {
++				continue
++			}
++			if rpcID != "" && nestedString(envelope, 1) != rpcID {
++				continue
++			}
++			raw, ok := envelope[2].(string)
++			if !ok || raw == "" {
++				continue
++			}
++			var payload any
++			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
++				continue
++			}
++			payloads = append(payloads, payload)
++		}
++	}
++	return payloads
++}
++
++// ---------------------------------------------------------------------------
++// Plan, document and citation extraction
++// ---------------------------------------------------------------------------
++
++func extractResearchPlan(candidate any) *nativeResearchPlan {
++	rich := nested(candidate, 12)
++	payload, ok := jspbField(rich, fieldResearchPlan).([]interface{})
++	if !ok {
++		payload, ok = jspbField(rich, fieldResearchPlanAlt).([]interface{})
++	}
++	if !ok {
++		return nil
++	}
++	plan := &nativeResearchPlan{
++		Title:         nestedString(payload, 0),
++		ETA:           nestedString(payload, 2),
++		ConfirmPrompt: nestedString(payload, 3, 0),
++	}
++	if steps, ok := nested(payload, 1).([]interface{}); ok {
++		for _, step := range steps {
++			label, body := nestedString(step, 1), nestedString(step, 2)
++			switch {
++			case label != "" && body != "":
++				plan.Steps = append(plan.Steps, label+": "+body)
++			case body != "":
++				plan.Steps = append(plan.Steps, body)
++			case label != "":
++				plan.Steps = append(plan.Steps, label)
++			}
++		}
++	}
++	if plan.Title == "" && plan.ETA == "" && plan.ConfirmPrompt == "" && len(plan.Steps) == 0 {
++		return nil
++	}
++	return plan
++}
++
++func extractResearchDocument(candidate any) *nativeResearchDocument {
++	document, ok := nested(candidate, 30, 0).([]interface{})
++	if !ok {
++		return nil
++	}
++	// [30] is a generic attachment block (a YouTube card fills it too); only a
++	// research document carries a task id at [3].
++	if isEmptyJSPB(nested(document, 3)) {
++		return nil
++	}
++	content := nestedString(document, 4)
++	if content == "" {
++		content = nestedString(document, 17, 0)
++	}
++	sources := extractCitations(jspbField(nested(document, 17, 1), fieldCitations))
++	if len(sources) == 0 {
++		sources = extractCitations(jspbField(nested(document, 5), fieldCitations))
++	}
++	return &nativeResearchDocument{
++		ID:      nestedString(document, 0),
++		Title:   nestedString(document, 2),
++		Content: content,
++		Sources: sources,
++	}
++}
++
++var (
++	citeMarkerPattern = regexp.MustCompile(`\[cite:\s*([\d,\s]+)\]`)
++	citeNumberPattern = regexp.MustCompile(`\d+`)
++)
++
++// extractCitations resolves "[cite: 1, 2]" marker groups to their web sources,
++// ordered by citation number; the first occurrence of each number wins.
++func extractCitations(groups any) []SourceInfo {
++	list, ok := groups.([]interface{})
++	if !ok {
++		return nil
++	}
++	resolved := map[int]SourceInfo{}
++	for _, group := range list {
++		marker := nestedString(group, 0, 0)
++		entries, ok := nested(group, 1).([]interface{})
++		if marker == "" || !ok {
++			continue
++		}
++		scope := marker
++		if match := citeMarkerPattern.FindStringSubmatch(marker); match != nil {
++			scope = match[1]
++		}
++		numbers := citeNumberPattern.FindAllString(scope, -1)
++		for i, entry := range entries {
++			if i >= len(numbers) {
++				break
++			}
++			id, err := strconv.Atoi(numbers[i])
++			if err != nil {
++				continue
++			}
++			if _, seen := resolved[id]; seen {
++				continue
++			}
++			link := nestedString(entry, 3, 0, 1)
++			if link == "" {
++				continue
++			}
++			source := SourceInfo{Title: nestedString(entry, 3, 0, 2), URL: link}
++			if parsed, err := url.Parse(link); err == nil {
++				source.Domain = parsed.Hostname()
++			}
++			resolved[id] = source
++		}
++	}
++	ids := make([]int, 0, len(resolved))
++	for id := range resolved {
++		ids = append(ids, id)
++	}
++	sort.Ints(ids)
++	sources := make([]SourceInfo, 0, len(ids))
++	for _, id := range ids {
++		sources = append(sources, resolved[id])
++	}
++	return sources
++}
++
++func candidateTurn(candidate any) researchTurn {
++	turn := researchTurn{
++		Text:     nestedString(candidate, 1, 0),
++		Plan:     extractResearchPlan(candidate),
++		Document: extractResearchDocument(candidate),
++	}
++	if status, ok := nested(candidate, 8, 0).(float64); ok {
++		turn.Status = int(status)
++	}
++	return turn
++}
++
++// parseResearchStream reads a StreamGenerate body of a research turn. Frames
++// are cumulative, so later frames overwrite earlier ones; conversation ids are
++// merged into conv.
++func parseResearchStream(body string, conv *researchConversation) researchTurn {
++	var turn researchTurn
++	for _, payload := range decodeFrames(body, "") {
++		if ids, ok := nested(payload, 1).([]interface{}); ok {
++			conv.merge(ids)
++		}
++		if contextToken := nestedString(payload, 25); contextToken != "" {
++			conv.Metadata[9] = contextToken
++		}
++		candidates, ok := nested(payload, 4).([]interface{})
++		if !ok || len(candidates) == 0 {
++			continue
++		}
++		candidate := candidates[0]
++		if rcid := nestedString(candidate, 0); rcid != "" {
++			conv.Metadata[2] = rcid
++		}
++		current := candidateTurn(candidate)
++		if current.Text != "" {
++			turn.Text = current.Text
++		}
++		if current.Plan != nil {
++			turn.Plan = current.Plan
++		}
++		if current.Document != nil {
++			turn.Document = current.Document
++		}
++		if current.Status != 0 {
++			turn.Status = current.Status
++		}
++	}
++	return turn
++}
++
++// parseChatTurns reads a hNvQHb (list conversation turns) body, newest turn first.
++func parseChatTurns(body string) []researchTurn {
++	var turns []researchTurn
++	for _, payload := range decodeFrames(body, listConversationTurnsRPC) {
++		rawTurns, ok := nested(payload, 0).([]interface{})
++		if !ok {
++			continue
++		}
++		for _, rawTurn := range rawTurns {
++			candidates, ok := nested(rawTurn, 3, 0).([]interface{})
++			if !ok {
++				continue
++			}
++			for _, candidate := range candidates {
++				if nestedString(candidate, 0) == "" {
++					continue
++				}
++				turns = append(turns, candidateTurn(candidate))
++			}
++		}
++	}
++	return turns
++}
++
++// ---------------------------------------------------------------------------
++// Network
++// ---------------------------------------------------------------------------
++
++// readChat fetches the latest turns of a conversation, newest first.
++func (c *Client) readChat(ctx context.Context, cid string, limit int) ([]researchTurn, error) {
++	c.mu.RLock()
++	at, cookieHdr, buildLabel, sessionID := c.at, c.cookieHeader, c.buildLabel, c.sessionID
++	language, generationID, authUser := c.language, c.generationID, c.authUser
++	c.mu.RUnlock()
++	if at == "" || cookieHdr == "" {
++		return nil, errors.New("client not initialized")
++	}
++	if language == "" {
++		language = "en"
++	}
++
++	rpcPayload, _ := json.Marshal([]interface{}{cid, limit, nil, 1, []int{1}, []int{4}, nil, 1})
++	freq, _ := json.Marshal([]interface{}{[]interface{}{[]interface{}{listConversationTurnsRPC, string(rpcPayload), nil, "generic"}}})
++
++	query := url.Values{
++		"rpcids":      {listConversationTurnsRPC},
++		"hl":          {language},
++		"_reqid":      {strconv.Itoa(rand.Intn(90000) + 10000)},
++		"rt":          {"c"},
++		"source-path": {geminiSourcePath(authUser)},
++	}
++	if buildLabel != "" {
++		query.Set("bl", buildLabel)
++	}
++	if sessionID != "" {
++		query.Set("f.sid", sessionID)
++	}
++	form := url.Values{"at": {at}, "f.req": {string(freq)}}
++
++	request, err := http.NewRequestWithContext(ctx, http.MethodPost,
++		geminiAccountURL(EndpointBatchExec, authUser)+"?"+query.Encode(), strings.NewReader(form.Encode()))
++	if err != nil {
++		return nil, fmt.Errorf("create chat read request: %w", err)
++	}
++	for name, value := range DefaultHeaders {
++		request.Header.Set(name, value)
++	}
++	request.Header.Set("Cookie", cookieHdr)
++	batchHeader := make([]any, 17)
++	batchHeader[0] = 1
++	batchHeader[8] = []int{4, 5, 6, 8}
++	batchHeader[16] = generationID
++	headerJSON, _ := json.Marshal(batchHeader)
++	request.Header.Set(geminiModelHeaderKey, string(headerJSON))
++	request.Header.Set("x-goog-ext-73010989-jspb", "[0]")
++
++	response, err := (&http.Client{Timeout: 2 * time.Minute}).Do(request)
++	if err != nil {
++		// url.Error includes the session query parameters; keep only its cause.
++		var requestErr *url.Error
++		if errors.As(err, &requestErr) {
++			err = requestErr.Err
++		}
++		return nil, fmt.Errorf("chat read request failed: %w", err)
++	}
++	defer response.Body.Close()
++	if response.StatusCode != http.StatusOK {
++		return nil, fmt.Errorf("chat read failed with HTTP status %d", response.StatusCode)
++	}
++	body, err := io.ReadAll(io.LimitReader(response.Body, maxChatReadResponseSize))
++	if err != nil {
++		return nil, fmt.Errorf("read chat response: %w", err)
++	}
++	dumpResearchBody("chat", string(body))
++	return parseChatTurns(string(body)), nil
++}
++
++// sendResearchTurn sends one turn of a research conversation.
++func (c *Client) sendResearchTurn(ctx context.Context, prompt, model string, conv *researchConversation) (researchTurn, error) {
++	response, err := c.generateContent(ctx, prompt, conv.Metadata, WithModel(model), func(cfg *GenerateConfig) {
++		cfg.DeepResearch = true
++	})
++	if err != nil {
++		return researchTurn{}, err
++	}
++	dumpResearchBody("turn", response.RawBody)
++	turn := parseResearchStream(response.RawBody, conv)
++	if turn.Plan == nil && turn.Document == nil && turn.Text == "" && conv.cid() == "" {
++		if reason, _ := response.Metadata["parse_error"].(string); reason != "" {
++			return turn, errors.New(reason)
++		}
++	}
++	return turn, nil
++}
++
++func reportReady(turn researchTurn) bool {
++	return turn.Document != nil && strings.TrimSpace(turn.Document.Content) != ""
++}
++
++// ---------------------------------------------------------------------------
++// Public flow
++// ---------------------------------------------------------------------------
++
++// deepResearchNative runs plan → confirm → wait. progress may be nil; when it
++// returns false the wait is abandoned (the task keeps running server-side).
++func (c *Client) deepResearchNative(ctx context.Context, query string, cfg *DeepResearchConfig, progress ProgressCallback) (*DeepResearchResult, error) {
++	startTime := time.Now()
++	emit := func(event DeepResearchEvent) bool {
++		if progress == nil {
++			return true
++		}
++		return progress(event)
++	}
++
++	c.mu.RLock()
++	model := cfg.Model
++	if model == "" && len(c.cachedModels) > 0 {
++		model = c.cachedModels[0].ID
++	}
++	c.mu.RUnlock()
++
++	prompt := query
++	if language := strings.TrimSpace(cfg.Language); language != "" && !strings.EqualFold(language, "English") {
++		prompt = fmt.Sprintf("%s\n\n(Write the report in this language: %s)", query, language)
++	}
++
++	c.log.Info("Deep research (native) starting", zap.String("model", model))
++	if !emit(DeepResearchEvent{Event: EventTypeProgress, Message: "Requesting research plan...", Progress: 2}) {
++		return nil, context.Canceled
++	}
++
++	conv := newResearchConversation()
++	planTurn, err := c.sendResearchTurn(ctx, prompt, model, conv)
++	if err != nil {
++		return nil, fmt.Errorf("deep research plan request failed: %w", err)
++	}
++	if planTurn.Plan == nil {
++		preview := planTurn.Text
++		if len(preview) > 600 {
++			preview = preview[:600]
++		}
++		return nil, fmt.Errorf("Gemini did not return a deep research plan (the account may be out of Deep Research quota, or the protocol changed). Reply preview: %q", preview)
++	}
++	if conv.cid() == "" {
++		return nil, errors.New("deep research plan carries no conversation id; cannot confirm it")
++	}
++	plan := planTurn.Plan
++	steps := []StepInfo{{
++		StepNumber:  1,
++		Type:        "plan",
++		Description: strings.TrimSpace(fmt.Sprintf("Research plan: %s (%d steps) %s", plan.Title, len(plan.Steps), plan.ETA)),
++		Query:       query,
++		Result:      strings.Join(plan.Steps, " | "),
++	}}
++	c.log.Info("Deep research plan received", zap.String("cid", conv.cid()), zap.String("title", plan.Title),
++		zap.Int("steps", len(plan.Steps)), zap.String("eta", plan.ETA))
++	if !emit(DeepResearchEvent{Event: EventTypeStep, Message: steps[0].Description, Progress: 8, Step: &steps[0]}) {
++		return nil, context.Canceled
++	}
++
++	confirm := plan.ConfirmPrompt
++	if confirm == "" {
++		confirm = deepResearchDefaultConfirm
++	}
++	startTurn, err := c.sendResearchTurn(ctx, confirm, model, conv)
++	if err != nil {
++		// The confirmation can land server-side while the request itself fails;
++		// the conversation is the source of truth, so keep going and poll it.
++		c.log.Warn("Deep research confirmation request failed; polling the conversation anyway", zap.Error(err))
++	}
++	steps = append(steps, StepInfo{StepNumber: 2, Type: "search", Description: "Research started: " + confirm, Result: startTurn.Text})
++	if !emit(DeepResearchEvent{Event: EventTypeStep, Message: steps[1].Description, Progress: 12, Step: &steps[1]}) {
++		return nil, context.Canceled
++	}
++
++	final := startTurn
++	interval := deepResearchPollInterval()
++	for polls := 0; !reportReady(final); polls++ {
++		select {
++		case <-ctx.Done():
++			return nil, fmt.Errorf("deep research did not finish in time (conversation %s keeps running in Gemini; open it there to read the report): %w", conv.cid(), ctx.Err())
++		case <-time.After(interval):
++		}
++		turns, readErr := c.readChat(ctx, conv.cid(), 10)
++		if readErr != nil {
++			c.log.Warn("Deep research poll failed", zap.Error(readErr))
++			continue
++		}
++		for _, turn := range turns { // newest first; the report can sit on an earlier turn
++			if reportReady(turn) {
++				final = turn
++				break
++			}
++		}
++		elapsed := time.Since(startTime).Round(time.Second)
++		progressValue := 12 + polls*3
++		if progressValue > 90 {
++			progressValue = 90
++		}
++		if !emit(DeepResearchEvent{Event: EventTypeProgress, Message: fmt.Sprintf("Researching... %s elapsed", elapsed), Progress: progressValue}) {
++			return nil, context.Canceled
++		}
++	}
++
++	document := final.Document
++	sources := document.Sources
++	if cfg.MaxSources > 0 && len(sources) > cfg.MaxSources {
++		sources = sources[:cfg.MaxSources]
++	}
++	steps = append(steps, StepInfo{
++		StepNumber:  3,
++		Type:        "write",
++		Description: "Report received: " + document.Title,
++		Result:      fmt.Sprintf("Report: %d chars, %d sources", len(document.Content), len(document.Sources)),
++	})
++	createdAt := startTime.Unix()
++	result := &DeepResearchResult{
++		ID:          generateResearchID(query, createdAt),
++		Query:       query,
++		Summary:     document.Content,
++		Sources:     sources,
++		Steps:       steps,
++		Model:       model,
++		CreatedAt:   createdAt,
++		CompletedAt: time.Now().Unix(),
++		DurationMs:  time.Since(startTime).Milliseconds(),
++	}
++	c.log.Info("Deep research (native) completed", zap.String("cid", conv.cid()),
++		zap.Int("report_chars", len(document.Content)), zap.Int("sources", len(document.Sources)),
++		zap.Int64("duration_ms", result.DurationMs))
++	return result, nil
++}
+diff --git a/internal/modules/providers/deep_research_native_test.go b/internal/modules/providers/deep_research_native_test.go
+new file mode 100644
+index 0000000..6beb036
+--- /dev/null
++++ b/internal/modules/providers/deep_research_native_test.go
+@@ -0,0 +1,257 @@
++package providers
++
++import (
++	"encoding/json"
++	"strings"
++	"testing"
++)
++
++// sparse builds a JSPB array of the given length whose trailing element is the
++// sparse bundle, keyed by one-based field number.
++func sparse(length int, fields map[int]any) []any {
++	list := make([]any, length)
++	bundle := map[string]any{}
++	for index, value := range fields {
++		bundle[itoa(index+1)] = value
++	}
++	list[length-1] = bundle
++	return list
++}
++
++func itoa(n int) string {
++	b, _ := json.Marshal(n)
++	return string(b)
++}
++
++func candidateWith(rcid, text string, rich any, document any, status int) []any {
++	candidate := make([]any, 31)
++	candidate[0] = rcid
++	candidate[1] = []any{text}
++	candidate[8] = []any{status}
++	candidate[12] = rich
++	if document != nil {
++		candidate[30] = []any{document}
++	}
++	return candidate
++}
++
++func researchDocument(taskID, title, content string, citations any) []any {
++	document := make([]any, 18)
++	document[0] = "doc-1"
++	document[2] = title
++	document[3] = taskID
++	document[4] = content
++	document[17] = []any{content, sparse(3, map[int]any{fieldCitations: citations})}
++	return document
++}
++
++// frame encodes one StreamGenerate / batchexecute envelope line.
++func frame(t *testing.T, rpcID string, payload any) string {
++	t.Helper()
++	inner, err := json.Marshal(payload)
++	if err != nil {
++		t.Fatal(err)
++	}
++	line, err := json.Marshal([]any{[]any{"wrb.fr", rpcID, string(inner)}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	return string(line)
++}
++
++func decoded(t *testing.T, value any) any {
++	t.Helper()
++	raw, err := json.Marshal(value)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var out any
++	if err := json.Unmarshal(raw, &out); err != nil {
++		t.Fatal(err)
++	}
++	return out
++}
++
++func planPayload() []any {
++	return []any{
++		"Thời lượng trận bóng đá",
++		[]any{
++			[]any{nil, "Nghiên cứu trang web", "Tìm Luật 7 của IFAB"},
++			[]any{nil, "", "Phân tích kết quả"},
++			[]any{nil, "Tạo báo cáo", ""},
++		},
++		"Sẵn sàng sau vài phút",
++		[]any{"Bắt đầu nghiên cứu"},
++	}
++}
++
++func TestApplyDeepResearchFlags(t *testing.T) {
++	inner := buildGenerateInner("q", nil, 3, "vi", "REQ", true)
++	if inner[45] != 1 {
++		t.Fatalf("precondition: temporary flag should be set, got %v", inner[45])
++	}
++	applyDeepResearchFlags(inner)
++	token, _ := inner[3].(string)
++	if !strings.HasPrefix(token, "!") || len(token) < 2500 {
++		t.Fatalf("research token has unexpected shape (len %d)", len(token))
++	}
++	if id, _ := inner[4].(string); len(id) != 32 {
++		t.Fatalf("research request id should be 32 hex chars, got %q", inner[4])
++	}
++	if inner[45] != nil {
++		t.Fatal("deep research must not be sent as a temporary chat")
++	}
++	encoded, _ := json.Marshal([]any{inner[49], inner[54], inner[55]})
++	if string(encoded) != `[1,[[[[[1]]]]],[[1]]]` {
++		t.Fatalf("unexpected research flags: %s", encoded)
++	}
++	if inner[79] != 3 || inner[59] != "REQ" {
++		t.Fatal("research flags must not disturb the model number or request id")
++	}
++}
++
++func TestJSPBFieldReadsPositionalAndSparse(t *testing.T) {
++	positional := make([]any, 60)
++	positional[fieldResearchPlan] = []any{"positional"}
++	if got := nestedString(jspbField(decoded(t, positional), fieldResearchPlan), 0); got != "positional" {
++		t.Fatalf("positional read failed: %q", got)
++	}
++	bundle := decoded(t, sparse(9, map[int]any{fieldResearchPlan: []any{"sparse"}}))
++	if got := nestedString(jspbField(bundle, fieldResearchPlan), 0); got != "sparse" {
++		t.Fatalf("sparse read failed: %q", got)
++	}
++	if jspbField(bundle, fieldCitations) != nil {
++		t.Fatal("absent field must read as nil")
++	}
++	// The bundle sitting in the positional slot is not the field's value.
++	if jspbField(decoded(t, sparse(fieldResearchPlan+1, map[int]any{1: "x"})), fieldResearchPlan) != nil {
++		t.Fatal("the sparse bundle itself must not be returned as a field value")
++	}
++}
++
++func TestExtractResearchPlan(t *testing.T) {
++	for name, rich := range map[string]any{
++		"primary field":   sparse(9, map[int]any{fieldResearchPlan: planPayload()}),
++		"alternate field": sparse(9, map[int]any{fieldResearchPlanAlt: planPayload()}),
++	} {
++		plan := extractResearchPlan(decoded(t, candidateWith("rc_1", "Đây là kế hoạch", rich, nil, 2)))
++		if plan == nil {
++			t.Fatalf("%s: plan not found", name)
++		}
++		if plan.Title != "Thời lượng trận bóng đá" || plan.ETA != "Sẵn sàng sau vài phút" || plan.ConfirmPrompt != "Bắt đầu nghiên cứu" {
++			t.Fatalf("%s: unexpected plan %+v", name, plan)
++		}
++		want := []string{"Nghiên cứu trang web: Tìm Luật 7 của IFAB", "Phân tích kết quả", "Tạo báo cáo"}
++		if strings.Join(plan.Steps, "|") != strings.Join(want, "|") {
++			t.Fatalf("%s: steps = %v", name, plan.Steps)
++		}
++	}
++	if extractResearchPlan(decoded(t, candidateWith("rc_1", "chat thường", sparse(9, nil), nil, 2))) != nil {
++		t.Fatal("an ordinary chat turn must not yield a plan")
++	}
++}
++
++func TestExtractResearchDocumentAndCitations(t *testing.T) {
++	entry := func(link, title string) []any {
++		return []any{nil, nil, nil, []any{[]any{"favicon", link, title}}}
++	}
++	citations := []any{
++		[]any{[]any{" [cite: 2, 1]"}, []any{entry("https://b.example/two", "Hai"), entry("https://www.theifab.com/laws", "IFAB")}},
++		[]any{[]any{" [cite: 1]"}, []any{entry("https://dup.example/ignored", "trùng")}},
++		[]any{[]any{" [cite: 3]"}, []any{[]any{nil, nil, nil, []any{[]any{"f", nil, "không url"}}}}},
++	}
++	document := extractResearchDocument(decoded(t,
++		candidateWith("rc_2", "Đã xong", nil, researchDocument("task-1", "Báo cáo", "# Báo cáo\nNội dung [cite: 1]", citations), 2)))
++	if document == nil || document.Title != "Báo cáo" || !strings.HasPrefix(document.Content, "# Báo cáo") {
++		t.Fatalf("unexpected document: %+v", document)
++	}
++	if len(document.Sources) != 2 {
++		t.Fatalf("want 2 sources (first occurrence wins, url required), got %+v", document.Sources)
++	}
++	if document.Sources[0].URL != "https://www.theifab.com/laws" || document.Sources[0].Domain != "www.theifab.com" || document.Sources[0].Title != "IFAB" {
++		t.Fatalf("citation 1 resolved wrongly: %+v", document.Sources[0])
++	}
++	if document.Sources[1].URL != "https://b.example/two" {
++		t.Fatalf("citation 2 resolved wrongly: %+v", document.Sources[1])
++	}
++
++	// A non-research attachment (no task id at [3]) is not a document.
++	card := researchDocument("", "YouTube", "x", nil)
++	card[3] = nil
++	if extractResearchDocument(decoded(t, candidateWith("rc_3", "video", nil, card, 2))) != nil {
++		t.Fatal("an attachment without a task id must not be read as a research document")
++	}
++}
++
++func TestParseResearchStreamMergesConversationIDs(t *testing.T) {
++	conv := newResearchConversation()
++	early := []any{nil, []any{"c_abc", "r_1"}, nil, nil, []any{candidateWith("rc_1", "Đang lập", sparse(9, nil), nil, 1)}}
++	final := make([]any, 26)
++	final[1] = []any{"c_abc", "r_2", nil}
++	final[4] = []any{candidateWith("rc_1", "Đây là kế hoạch", sparse(9, map[int]any{fieldResearchPlan: planPayload()}), nil, 2)}
++	final[25] = "context-token"
++	body := ")]}'\n\n123\n" + frame(t, "", early) + "\n456\n" + frame(t, "", final) + "\n25\n[[\"e\",4,null,null,131]]\n"
++
++	turn := parseResearchStream(body, conv)
++	if turn.Plan == nil || turn.Text != "Đây là kế hoạch" || turn.Status != 2 {
++		t.Fatalf("unexpected turn: %+v", turn)
++	}
++	encoded, _ := json.Marshal(conv.Metadata)
++	if string(encoded) != `["c_abc","r_2","rc_1",null,null,null,null,null,null,"context-token"]` {
++		t.Fatalf("metadata = %s", encoded)
++	}
++	if conv.cid() != "c_abc" {
++		t.Fatalf("cid = %q", conv.cid())
++	}
++
++	// The confirmation turn can end without any candidate: ids must survive.
++	parseResearchStream(")]}'\n\n"+frame(t, "", []any{nil, []any{nil, "r_3"}})+"\n", conv)
++	if conv.cid() != "c_abc" || conv.Metadata[1] != "r_3" || conv.Metadata[2] != "rc_1" {
++		t.Fatalf("ids lost after an empty turn: %v", conv.Metadata)
++	}
++}
++
++func TestParseChatTurnsFindsFinishedReport(t *testing.T) {
++	running := candidateWith("rc_run", "Mình đang nghiên cứu", nil, researchDocument(deepResearchTaskPlaceholder, "", "", nil), 1)
++	running[30].([]any)[0].([]any)[17] = nil
++	finished := candidateWith("rc_done", "Đã hoàn tất", nil, researchDocument("task-9", "Báo cáo", "# Báo cáo đầy đủ", nil), 2)
++	turnOf := func(candidate any) []any {
++		return []any{[]any{"c_abc", "r_x"}, nil, nil, []any{[]any{candidate}}}
++	}
++	body := ")]}'\n\n999\n" +
++		frame(t, "otherRpc", []any{[]any{turnOf(finished)}}) + "\n" +
++		frame(t, listConversationTurnsRPC, []any{[]any{turnOf(running), turnOf(finished)}}) + "\n"
++
++	turns := parseChatTurns(body)
++	if len(turns) != 2 {
++		t.Fatalf("want 2 turns from the matching RPC only, got %d", len(turns))
++	}
++	if reportReady(turns[0]) {
++		t.Fatal("a running research turn (empty document body) must not count as ready")
++	}
++	if turns[0].Document == nil || turns[0].Status != 1 {
++		t.Fatalf("running turn should still expose its empty document: %+v", turns[0])
++	}
++	if !reportReady(turns[1]) || turns[1].Document.Content != "# Báo cáo đầy đủ" {
++		t.Fatalf("finished report not found: %+v", turns[1])
++	}
++}
++
++func TestDeepResearchModeDefaultsToNative(t *testing.T) {
++	t.Setenv(deepResearchModeEnv, "")
++	if deepResearchMode() != DeepResearchModeNative {
++		t.Fatal("native must be the default mode")
++	}
++	t.Setenv(deepResearchModeEnv, " Emulated ")
++	if deepResearchMode() != DeepResearchModeEmulated {
++		t.Fatal("emulated mode must be selectable")
++	}
++	t.Setenv(deepResearchPollEnv, "2")
++	if deepResearchPollInterval() != deepResearchDefaultPoll {
++		t.Fatal("poll interval below 5s must fall back to the default")
++	}
++	t.Setenv(deepResearchPollEnv, "30")
++	if deepResearchPollInterval().Seconds() != 30 {
++		t.Fatal("poll interval override ignored")
++	}
++}

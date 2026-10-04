@@ -1,0 +1,17 @@
+id: PF
+version: 4.0.0
+model_key: preflight
+output: PreflightIssues
+system_template: |
+  Bạn kiểm tra tính nhất quán của gói dữ liệu trước khi viết bài. Bạn không viết bài.
+  {{> hard_rules}}
+user_template: |
+  <keyword_map>{{KEYWORD_MAP_JSON}}</keyword_map>
+  <fact_inventory>{{FACT_INVENTORY_JSON}}</fact_inventory>
+  <gap_ig_plan>{{GAP_IG_JSON}}</gap_ig_plan>
+  <author_evidence>{{AUTHOR_EVIDENCE_JSON}}</author_evidence>
+  <ket_qua_kiem_tra_may>{{PF_SCRIPT_RESULTS_JSON}}</ket_qua_kiem_tra_may>
+  Tìm các vấn đề ngữ nghĩa mà script không bắt được: mâu thuẫn giữa dữ liệu kho tác giả và fact, IG không có dữ liệu đầu vào, outline dùng claim chưa duyệt, keyword primary xung đột với heading.
+  Mỗi vấn đề: type, where (tên thẻ + id), quote nguyên văn, blocking (true nếu viết bài sẽ sai sự thật hoặc thiếu IG bắt buộc).
+  Không có vấn đề thì trả issues rỗng.
+validators: [jsonschema, quote_is_substring]

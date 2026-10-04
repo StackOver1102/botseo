@@ -1,0 +1,174 @@
+{
+ "checklist_qa": [
+  {
+   "check_id": "V1",
+   "question": "Bài có xưng \"mình\" và gọi người đọc là \"bạn\" nhất quán, không xuất hiện \"chúng tôi\"/\"quý khách\"/\"các bạn độc giả\" không?"
+  },
+  {
+   "check_id": "V2",
+   "question": "Độ dài câu trung bình của bài có nằm trong khoảng 11–19 từ và không có câu nào vượt 30 từ không?"
+  },
+  {
+   "check_id": "V3",
+   "question": "Bài có giữ văn thông tin rõ ràng, đồng thời có ít nhất một cụm khẩu ngữ tự nhiên (kiểu \"nhanh hơn hẳn\") mà không dùng văn hành chính không?"
+  },
+  {
+   "check_id": "V4",
+   "question": "Câu đầu tiên của bài có trả lời trực tiếp câu hỏi ở tiêu đề (định nghĩa hoặc đáp án) và trong hai câu đầu có một trải nghiệm cá nhân ngôi thứ nhất không?"
+  },
+  {
+   "check_id": "V5",
+   "question": "Mỗi khái niệm chính có được giải thích bằng định nghĩa ngắn kèm điều kiện/yêu cầu cụ thể (danh từ cụ thể) thay vì mô tả chung chung không?"
+  },
+  {
+   "check_id": "V6",
+   "question": "Bài có ít nhất một trải nghiệm cá nhân có con số cụ thể và mọi số liệu đều có mốc thời gian kèm nguồn truy được không?"
+  },
+  {
+   "check_id": "V7",
+   "question": "Thuật ngữ tài chính và từ mượn (app, online, CMND/CCCD) có được dùng ở mức phổ thông, không có thuật ngữ chuyên sâu nào xuất hiện mà không giải thích không?"
+  },
+  {
+   "check_id": "V8",
+   "question": "Tất cả các đoạn văn trong bài có dài tối đa 3 câu không?"
+  },
+  {
+   "check_id": "V9",
+   "question": "Bài có tránh hoàn toàn các câu kết khuôn mẫu như \"Hy vọng bài viết đã mang đến thông tin hữu ích\" và các cụm nối sáo như \"Tóm lại\" không?"
+  },
+  {
+   "check_id": "V10",
+   "question": "Bài chỉ dùng tiêu đề H1/H2 dạng cụm ngắn, không dùng bullet, in đậm hay emoji không?"
+  }
+ ],
+ "dimensions": [
+  {
+   "description": "Tác giả xưng \"mình\" khi kể trải nghiệm cá nhân và gọi người đọc là \"bạn\" khi khuyên. Giọng ngang hàng, gần gũi, không dùng \"chúng tôi\" hay \"quý khách\".",
+   "dim_id": "D1",
+   "evidence_quotes": [
+    "Mình đã từng vay thử qua hai app và thấy thủ tục nhanh hơn hẳn so với ngân hàng.",
+    "Tóm lại, bạn cần kiểm tra kỹ trước khi vay."
+   ],
+   "name": "Xưng hô",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Câu ngắn đến trung bình: 7 câu, trung bình khoảng 14,9 từ, độ lệch chuẩn khoảng 3,4, CV khoảng 0,23. Không có câu dài (long_share = 0). Nhịp câu khá đều, ít biến thiên. Mỗi câu thường chỉ chứa một ý, tối đa một dấu phẩy liệt kê.",
+   "dim_id": "D2",
+   "evidence_quotes": [
+    "Người vay chỉ cần CMND/CCCD và tài khoản ngân hàng.",
+    "Vay tiền online là hình thức vay qua ứng dụng hoặc website, không cần đến quầy giao dịch."
+   ],
+   "name": "Độ dài câu",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Bán trang trọng. Nền câu là văn thông tin, rõ ràng, nhưng có cài cụm khẩu ngữ để tăng sức nặng cảm xúc, như \"nhanh hơn hẳn\" hay \"đòi nợ kiểu khủng bố\". Không dùng văn hành chính, không dùng từ Hán Việt nặng.",
+   "dim_id": "D3",
+   "evidence_quotes": [
+    "Mình đã từng vay thử qua hai app và thấy thủ tục nhanh hơn hẳn so với ngân hàng.",
+    "Nhiều app không có giấy phép, thu phí ẩn và đòi nợ kiểu khủng bố."
+   ],
+   "name": "Mức trang trọng",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Mở bằng một câu định nghĩa trực tiếp, trả lời ngay câu hỏi ở tiêu đề. Câu thứ hai là trải nghiệm cá nhân ngôi thứ nhất kèm một so sánh cụ thể (app và ngân hàng). Không rào đón, không đặt câu hỏi tu từ. Lưu ý: mẫu chỉ có một bài nên đây mới là một lần mở bài. [CẦN NGƯỜI: bổ sung thêm 1–2 bài mẫu để xác nhận khuôn mở bài này có lặp lại không]",
+   "dim_id": "D4",
+   "evidence_quotes": [
+    "Vay tiền online là hình thức vay qua ứng dụng hoặc website, không cần đến quầy giao dịch.",
+    "Mình đã từng vay thử qua hai app và thấy thủ tục nhanh hơn hẳn so với ngân hàng."
+   ],
+   "name": "Cách mở bài",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Giải thích theo lối định nghĩa ngắn rồi nêu điều kiện hoặc yêu cầu cụ thể, bằng danh từ cụ thể (CMND/CCCD, tài khoản ngân hàng, ứng dụng, website). Không phân tích cơ chế sâu, không dùng ẩn dụ.",
+   "dim_id": "D5",
+   "evidence_quotes": [
+    "Vay tiền online là hình thức vay qua ứng dụng hoặc website, không cần đến quầy giao dịch.",
+    "Người vay chỉ cần CMND/CCCD và tài khoản ngân hàng."
+   ],
+   "name": "Cách giải thích",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Minh hoạ bằng hai loại chất liệu: trải nghiệm cá nhân có số lượng cụ thể (\"hai app\") và số liệu có mốc thời gian (\"Năm 2024\", \"18%/năm\"). Không có ví dụ tình huống giả định. Số liệu trong bài mới phải có nguồn truy được. [CẦN NGƯỜI: xác nhận nguồn của số liệu lãi suất 18%/năm năm 2024 trong mẫu]",
+   "dim_id": "D6",
+   "evidence_quotes": [
+    "Mình đã từng vay thử qua hai app và thấy thủ tục nhanh hơn hẳn so với ngân hàng.",
+    "Năm 2024, lãi suất vay tiêu dùng trung bình khoảng 18%/năm tại các công ty tài chính."
+   ],
+   "name": "Dùng ví dụ",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Dùng thuật ngữ tài chính phổ thông (lãi suất vay tiêu dùng, công ty tài chính, giấy phép, phí ẩn), viết tắt quen thuộc (CMND/CCCD) và từ mượn thông dụng (\"app\", \"online\"). Thuật ngữ không được giải thích thêm vì đã quen với số đông. Không thấy từ địa phương; phương ngữ chưa xác định được. [CẦN NGƯỜI: cho biết tác giả có dùng từ địa phương Bắc/Nam hay không]",
+   "dim_id": "D7",
+   "evidence_quotes": [
+    "Người vay chỉ cần CMND/CCCD và tài khoản ngân hàng.",
+    "Năm 2024, lãi suất vay tiêu dùng trung bình khoảng 18%/năm tại các công ty tài chính.",
+    "Nhiều app không có giấy phép, thu phí ẩn và đòi nợ kiểu khủng bố."
+   ],
+   "name": "Thuật ngữ & từ địa phương",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Đoạn rất ngắn, mỗi đoạn 1–2 câu, mỗi mục H2 chỉ một đoạn. Thông tin dồn nén, đi thẳng vào ý, không có đoạn chuyển tiếp dài.",
+   "dim_id": "D8",
+   "evidence_quotes": [
+    "Người vay chỉ cần CMND/CCCD và tài khoản ngân hàng. Năm 2024, lãi suất vay tiêu dùng trung bình khoảng 18%/năm tại các công ty tài chính.",
+    "Nhiều app không có giấy phép, thu phí ẩn và đòi nợ kiểu khủng bố. Tóm lại, bạn cần kiểm tra kỹ trước khi vay."
+   ],
+   "name": "Nhịp đoạn",
+   "status": "DU_MAU"
+  },
+  {
+   "description": "Phần \"Kết luận\" duy nhất trong mẫu chỉ có một câu chúc chung chung, mang tính văn mẫu, không phản ánh giọng thật. Câu \"Tóm lại\" nằm ở cuối mục rủi ro chứ không phải phần kết bài. Không đủ căn cứ để mô tả cách kết đặc trưng. [CẦN NGƯỜI: bổ sung mẫu kết bài thật của tác giả, ví dụ kết bằng lời khuyên hành động hoặc trả lời thẳng câu hỏi \"Có nên vay không?\"]",
+   "dim_id": "D9",
+   "evidence_quotes": [
+    "Hy vọng bài viết đã mang đến thông tin hữu ích cho bạn."
+   ],
+   "name": "Cách kết",
+   "status": "KHONG_DU_MAU"
+  },
+  {
+   "description": "H1 viết dạng câu hỏi kép. H2 là cụm danh từ ngắn, không dấu chấm. Không dùng bullet, không in đậm, không emoji; thông tin, kể cả dạng liệt kê, đều viết thành câu văn liền.",
+   "dim_id": "D10",
+   "evidence_quotes": [
+    "# Vay tiền online là gì? Có nên vay không?",
+    "## Rủi ro khi vay tiền online",
+    "Nhiều app không có giấy phép, thu phí ẩn và đòi nợ kiểu khủng bố."
+   ],
+   "name": "Định dạng (bullet/bold/emoji)",
+   "status": "DU_MAU"
+  }
+ ],
+ "negative_exemplars_qa_only": [
+  "Hy vọng bài viết đã mang đến thông tin hữu ích cho bạn.",
+  "Tóm lại, bạn cần kiểm tra kỹ trước khi vay.",
+  "## Kết luận"
+ ],
+ "positive_exemplars": [
+  {
+   "function": "mo_bai",
+   "quote": "Mình đã từng vay thử qua hai app và thấy thủ tục nhanh hơn hẳn so với ngân hàng."
+  },
+  {
+   "function": "giai_thich",
+   "quote": "Người vay chỉ cần CMND/CCCD và tài khoản ngân hàng."
+  },
+  {
+   "function": "vi_du",
+   "quote": "Nhiều app không có giấy phép, thu phí ẩn và đòi nợ kiểu khủng bố."
+  },
+  {
+   "function": "chuyen_y",
+   "quote": "[CẦN NGƯỜI: mẫu không có câu chuyển ý, các mục chỉ nối bằng tiêu đề H2; cần bổ sung một câu chuyển ý thật của tác giả]"
+  },
+  {
+   "function": "ket_bai",
+   "quote": "[CẦN NGƯỜI: mẫu không có câu kết bài đạt chuẩn giọng; cần bổ sung một câu kết thật của tác giả]"
+  }
+ ]
+}

@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO Pipeline Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel2: #f0f2f5; --line: #e2e5ea; --text: #1d2330; --muted: #6b7384;
+  --accent: #2f6fed; --ok: #1f9d55; --warn: #c98a00; --bad: #d64545; --auto: #8a4fd6; --wait: #2f8fbd;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --panel: #1a1e26; --panel2: #222733; --line: #2d3340; --text: #e4e7ee; --muted: #8d95a7;
+    --accent: #5b8cff; --ok: #3ccf7e; --warn: #e5b33c; --bad: #ff6b6b; --auto: #b48cff; --wait: #56b4e0;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --panel: #1a1e26; --panel2: #222733; --line: #2d3340; --text: #e4e7ee; --muted: #8d95a7;
+  --accent: #5b8cff; --ok: #3ccf7e; --warn: #e5b33c; --bad: #ff6b6b; --auto: #b48cff; --wait: #56b4e0;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; }
+.stat { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); }
+.stat b { color: var(--text); font-size: 14px; }
+.spacer { flex: 1; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 6px; }
+.pulse.stale { background: var(--bad); }
+main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 58px); }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } #jobs { max-height: 40vh; } }
+#jobs { border-right: 1px solid var(--line); overflow: auto; background: var(--panel); }
+.job { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.job:hover { background: var(--panel2); }
+.job.sel { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+.job .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job .m { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 4px; flex-wrap: wrap; }
+.bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--panel2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.b-done { color: var(--ok); border-color: var(--ok); }
+.b-run { color: var(--accent); border-color: var(--accent); }
+.b-wait { color: var(--wait); border-color: var(--wait); }
+.b-bad { color: var(--bad); border-color: var(--bad); }
+.b-auto { color: var(--auto); border-color: var(--auto); }
+.b-warn { color: var(--warn); border-color: var(--warn); }
+#detail { padding: 16px; overflow: auto; min-width: 0; }
+.empty { color: var(--muted); padding: 40px; text-align: center; }
+.head { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: flex-end; margin-bottom: 12px; }
+.head h2 { margin: 0; font-size: 20px; flex-basis: 100%; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.track { display: flex; flex-wrap: wrap; gap: 4px; }
+.st { font-size: 11px; padding: 3px 6px; border-radius: 4px; background: var(--panel2); color: var(--muted); border: 1px solid transparent; position: relative; }
+.st.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.st.cur { color: #fff; background: var(--accent); }
+.st.cur.wait { background: var(--wait); }
+.st sup { font-size: 9px; margin-left: 2px; color: var(--warn); }
+.nowline { margin-top: 10px; font-size: 13px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 12px; overflow-x: auto; }
+.tabs button { background: none; border: 0; padding: 8px 12px; color: var(--muted); cursor: pointer; font: inherit; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; position: sticky; top: 0; background: var(--panel); }
+td.r { white-space: nowrap; }
+.why { color: var(--muted); max-width: 640px; }
+tr.autopilot td { background: color-mix(in srgb, var(--auto) 8%, transparent); }
+tr.rewind td { background: color-mix(in srgb, var(--warn) 10%, transparent); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--panel2); }
+tr.picked td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.split { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 12px; }
+@media (max-width: 1200px) { .split { grid-template-columns: 1fr; } }
+.runlist { max-height: 70vh; overflow: auto; }
+.steph td { font-weight: 600; background: var(--panel2); font-size: 12px; }
+pre { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow: auto; max-height: 65vh; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 var(--mono); margin: 0; }
+.subtabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+.subtabs button { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+.subtabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.err { color: var(--bad); }
+.article { max-width: 780px; line-height: 1.7; }
+.article h1 { font-size: 24px; } .article h2 { font-size: 19px; margin-top: 28px; }
+.article table { font-size: 13px; }
+.meta { background: var(--panel2); border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+.warn-item { border-left: 3px solid var(--warn); padding: 6px 10px; margin-bottom: 8px; background: var(--panel2); border-radius: 0 6px 6px 0; }
+.warn-item.auto { border-left-color: var(--auto); }
+.small { font-size: 12px; color: var(--muted); }
+details.step { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 8px; margin-bottom: 8px; }
+details.step.s-done { border-left-color: var(--ok); }
+details.step.s-running { border-left-color: var(--accent); }
+details.step.s-stopped { border-left-color: var(--bad); }
+details.step.s-pending { opacity: .75; }
+details.step > summary { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 10px 12px; cursor: pointer; list-style: none; }
+details.step > summary::-webkit-details-marker { display: none; }
+details.step > summary .n { color: var(--muted); width: 22px; text-align: right; }
+details.step > summary b { font-size: 14px; }
+details.step > summary code { font: 11px var(--mono); color: var(--muted); }
+.stepbody { padding: 0 12px 12px 44px; display: grid; gap: 12px; }
+@media (max-width: 900px) { .stepbody { padding-left: 12px; } }
+.stepbody h4 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.runrow { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.runrow button, .artbtn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; padding: 3px 9px; cursor: pointer; font: inherit; font-size: 12px; }
+.runrow button.on, .artbtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pane:not(:empty) { margin: 4px 0 8px; }
+.pane pre { max-height: 55vh; }
+.editbox { background: var(--panel2); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+.editbox ul { margin: 4px 0 0; padding-left: 18px; }
+.editbox li { margin: 3px 0; }
+.editbox code { font: 12px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-word; }
+a { color: var(--accent); }
+.copy { margin-left: auto; }
+button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+button.primary:disabled { opacity: .6; cursor: wait; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 7px 14px; font: inherit; cursor: pointer; }
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); padding: 0; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.dlg-head { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.dlg-head h3 { margin: 0; font-size: 16px; flex: 1; }
+.dlg-body { padding: 14px 16px; overflow: auto; max-height: calc(100vh - 170px); display: grid; gap: 12px; }
+.dlg-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--line); align-items: center; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; background: none; border: 0; padding: 9px; font: inherit; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.field input, .field textarea, .field select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; }
+.field textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
+.row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.hint { font-size: 12px; color: var(--muted); }
+.only-a, .only-b { display: grid; gap: 12px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SEO Pipeline</h1>
+  <div class="stat">Chi phí hôm nay<b id="spend">–</b></div>
+  <div class="stat">Hàng đợi ChatGPT<b id="q-openai">–</b></div>
+  <div class="stat">Hàng đợi Gemini<b id="q-gemini">–</b></div>
+  <div class="stat">Thời gian/lượt web (24h)<b id="lat">–</b></div>
+  <div class="spacer"></div>
+  <button id="newjob" class="primary">+ Tạo job</button>
+  <div class="small"><span class="pulse" id="pulse"></span><span id="updated">đang tải…</span> · <span id="mode">…</span></div>
+</header>
+<main>
+  <nav id="jobs"></nav>
+  <section id="detail"><div class="empty">Chọn một job bên trái</div></section>
+</main>
+<dialog id="dlg">
+  <form id="jobform" method="dialog">
+    <div class="dlg-head"><h3>Tạo job mới</h3><button type="button" class="ghost" id="dlg-x">Đóng</button></div>
+    <div class="dlg-body">
+      <div class="seg" id="branchseg">
+        <button type="button" data-b="A">Bài có sẵn (nhánh A) — làm mới bài</button>
+        <button type="button" data-b="B" class="on">Bài mới (nhánh B) — tự lấy tư liệu từ SERP</button>
+      </div>
+      <div class="field"><label id="topiclabel">Chủ đề *</label><input name="topic" placeholder="vd. Xem trực tiếp bóng đá ở đâu hợp pháp">
+        <div class="hint" id="topichint" hidden>Không bắt buộc: bỏ trống thì lấy keyword có volume cao nhất.</div></div>
+      <div class="field only-full"><label>Mô tả (người đọc, góc nhìn, điều cần tránh)</label><textarea name="brief" rows="3"></textarea></div>
+      <div class="only-a" hidden>
+        <div class="field"><label>Cách làm</label>
+          <select name="flow" id="flowsel">
+            <option value="full" selected>Làm mới đầy đủ — kiểm chứng & cập nhật số liệu, thêm ý mới (IG), viết lại đúng giọng, title/meta, QA (~0,3–0,5 USD)</option>
+            <option value="rework">Chỉ viết lại câu chữ — giữ nguyên nội dung & số liệu (~0,1 USD, 2 phút)</option>
+          </select></div>
+        <div class="field"><label>Link bài cũ</label>
+          <div style="display:flex;gap:8px"><input name="article_url" placeholder="https://site.vn/bai-cu" style="flex:1">
+            <button type="button" class="ghost" id="fetchart">Lấy bài từ link</button></div>
+          <div class="hint" id="fetchhint">Dán link rồi bấm "Lấy bài" để xem trước, hoặc để trống ô nội dung — server tự tải khi tạo job.</div></div>
+        <div class="field"><label>Nội dung bài hiện tại (hoặc dùng link ở trên)</label>
+          <textarea name="article_md" rows="12" placeholder="Dán nguyên bài từ CMS (văn bản thường hoặc Markdown, không cần tiêu đề), hoặc chọn file bên dưới"></textarea>
+          <input type="file" id="articlefile" accept=".md,.txt,.markdown,.html">
+          <div class="hint">Dán nguyên văn, không cần tiêu đề. Heading không có dấu # được tự nhận ra. Keyword để trống thì tự lấy từ bài.</div></div>
+      </div>
+      <div class="only-b">
+        <div class="row2">
+          <div class="field"><label>Số trang SERP làm tư liệu</label><input name="auto_source" type="number" min="0" max="8" value="5">
+            <div class="hint">0 = bài mới hoàn toàn (ít dữ kiện)</div></div>
+          <div class="field"><label>Truy vấn tìm tư liệu</label><input name="serp_query" placeholder="mặc định = chủ đề"></div>
+        </div>
+      </div>
+      <div class="field"><label id="kwlabel">Keyword *</label>
+        <textarea name="keywords_text" rows="5" placeholder="mỗi dòng: keyword,volume&#10;trực tiếp bóng đá,1240000"></textarea>
+        <input type="file" id="kwfile" accept=".csv,.tsv,.txt">
+        <div class="hint" id="kwhint">Hoặc chọn file export Ahrefs (UTF-16, tab) / CSV có cột Keyword, Volume.</div></div>
+      <div class="field only-full"><label>Câu hỏi PAA (mỗi dòng một câu, tuỳ chọn)</label><textarea name="paa_text" rows="3"></textarea></div>
+      <div class="row2 only-full">
+        <div class="field"><label>Site <a href="#" id="addsite" style="font-weight:400">+ thêm</a></label><select name="site_id" id="sitesel"></select>
+          <div class="hint" id="sitehint"></div></div>
+        <div class="field"><label>Tác giả <a href="#" id="addauthor" style="font-weight:400">+ thêm</a></label><select name="author_id" id="authorsel"></select>
+          <div class="hint" id="authorhint"></div></div>
+        <div class="field"><label>Mode</label><select name="mode"><option>lite</option><option selected>standard</option><option>heavy</option></select></div>
+        <div class="field"><label>Độ dài mục tiêu (chữ)</label><input name="target_words" type="number" value="1500" min="300" max="8000"></div>
+        <div class="field"><label>YMYL</label><select name="ymyl"><option value="false">Không</option><option value="true">Có (sức khoẻ, tài chính, pháp lý)</option></select></div>
+      </div>
+    </div>
+    <div class="dlg-foot"><span class="hint" id="formmsg"></span><button type="button" class="ghost" id="dlg-cancel">Huỷ</button><button type="submit" class="primary" id="dlg-ok">Tạo và chạy</button></div>
+  </form>
+</dialog>
+<script>
+const TOKEN_KEY = "seo-ui-token";
+try { const t = new URLSearchParams(location.search).get("token"); if (t) sessionStorage.setItem(TOKEN_KEY, t); } catch (e) {}
+function token() { try { return sessionStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } }
+async function api(path) {
+  const r = await fetch(path, { headers: token() ? { "X-UI-Token": token() } : {} });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = v => "$" + Number(v || 0).toFixed(3);
+const time = t => t ? new Date(t).toLocaleTimeString("vi-VN", { hour12: false }) : "";
+function ago(t) {
+  if (!t) return "";
+  const s = Math.max(0, (Date.now() - new Date(t)) / 1000);
+  if (s < 60) return `${Math.round(s)} giây trước`;
+  if (s < 3600) return `${Math.round(s / 60)} phút trước`;
+  if (s < 86400) return `${Math.round(s / 3600)} giờ trước`;
+  return `${Math.round(s / 86400)} ngày trước`;
+}
+function dur(a, b) {
+  const s = Math.max(0, ((b ? new Date(b) : Date.now()) - new Date(a)) / 1000);
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m${String(Math.round(s % 60)).padStart(2, "0")}s`;
+  return `${Math.floor(s / 3600)}h${String(Math.round((s % 3600) / 60)).padStart(2, "0")}m`;
+}
+function stateBadge(j) {
+  const st = j.state;
+  let cls = "b-run", label = st;
+  if (st === "DONE") cls = "b-done";
+  else if (st === "CANCELLED") cls = "";
+  else if (st === "NEEDS_HUMAN" || st === "STALE") { cls = "b-bad"; label = `${st} @ ${j.resume_state || "?"}`; }
+  else if ((j.last_error || "").startsWith("awaiting_external")) { cls = "b-wait"; label = `${st} · chờ web`; }
+  else if (j.current_call) { label = `${st} · ${j.current_call.prompt_id} API`; }
+  else if (j.last_error) { cls = "b-warn"; label = `${st} · thử lại`; }
+  return `<span class="badge ${cls}">${esc(label)}</span>`;
+}
+
+let PIPE = [], selected = location.hash.slice(1) || null, detailTab = "steps", pickedRun = null, runView = "output";
+// tab "Các bước": nhớ mục đang mở để vẽ lại (job đổi trạng thái) không làm mất chỗ đang đọc
+let stepsFor = null, openSteps = new Set(), openRuns = {}, openArts = new Set(), runCache = {};
+let lastDetail = null, articleCache = {};
+
+async function refreshOverview() {
+  const o = await api("/ui/api/overview");
+  PIPE = o.pipeline;
+  $("#spend").textContent = usd(o.spend_today);
+  for (const p of ["openai", "gemini"]) {
+    const rows = o.queue.filter(q => q.provider === p);
+    const pend = rows.find(r => r.status === "pending"), cl = rows.find(r => r.status === "claimed");
+    const old = pend ? (Date.now() - new Date(pend.oldest)) / 1000 : 0;
+    const el = $(`#q-${p}`);
+    el.innerHTML = `${pend ? pend.n : 0} chờ · ${cl ? cl.n : 0} đang chạy` +
+      (old > 180 ? ` <span class="badge b-bad" title="task chờ lâu: extension có đang mở?">chờ ${dur(pend.oldest)}</span>` : "");
+  }
+  $("#lat").textContent = o.recent.map(r => `${r.provider === "openai" ? "GPT" : "Gemini"} ${r.median_s ? Math.round(r.median_s) + "s" : "–"}${r.failed ? ` (${r.failed} lỗi)` : ""}`).join(" · ") || "–";
+  const REWORK = ["REWORK", "REWORK_CHECK", "DONE"];
+  $("#jobs").innerHTML = o.jobs.map(j => {
+    const pipe = j.flow === "rework" ? REWORK : PIPE;
+    const i = pipe.indexOf(j.state === "NEEDS_HUMAN" ? j.resume_state : j.state);
+    const pos = j.state === "DONE" ? pipe.length - 1 : Math.max(i, 0);
+    const pct = Math.round(pos / (pipe.length - 1) * 100);
+    return `<div class="job ${j.id === selected ? "sel" : ""}" data-id="${j.id}">
+      <div class="t" title="${esc(j.topic)}">${esc(j.topic)}</div>
+      <div class="m">${stateBadge(j)} <span>${usd(j.cost_usd)}</span> <span>${j.flow === "rework" ? "viết lại bài" : esc(j.mode || "")}${j.branch ? " · " + j.branch : ""}</span>
+        ${j.autopilot_n ? `<span class="badge b-auto" title="số lần autopilot can thiệp">auto ${j.autopilot_n}</span>` : ""}
+        <span title="${esc(j.updated_at)}">${ago(j.updated_at)}</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div></div>`;
+  }).join("") || `<div class="empty">Chưa có job</div>`;
+  if (!selected && o.jobs.length) select(o.jobs[0].id);
+}
+
+function select(id) {
+  if (selected !== id) { pickedRun = null; }
+  selected = id; location.hash = id;
+  document.querySelectorAll(".job").forEach(el => el.classList.toggle("sel", el.dataset.id === id));
+  refreshDetail(true);
+}
+$("#jobs").addEventListener("click", e => { const el = e.target.closest(".job"); if (el) select(el.dataset.id); });
+
+async function refreshDetail(force) {
+  if (!selected) return;
+  const d = await api(`/ui/api/jobs/${selected}`);
+  const sig = JSON.stringify([d.job.state, d.job.updated_at, d.job.last_error, d.job.current_call, d.transitions.length, d.runs.length, d.tasks.map(t => t.status).join()]);
+  if (!force && lastDetail && lastDetail.sig === sig) { updateClock(d); return; }
+  lastDetail = { sig, d };
+  renderDetail(d);
+}
+
+function updateClock(d) {
+  const el = $("#elapsed"); if (el) el.textContent = dur(d.job.created_at, d.job.state === "DONE" ? d.job.updated_at : null);
+  const cc = $("#callclock"); if (cc) cc.textContent = dur(cc.dataset.t);
+}
+
+function renderDetail(d) {
+  const j = d.job;
+  const PIPE = d.pipeline;
+  const visits = {};
+  d.transitions.forEach(t => { visits[t.from_state] = (visits[t.from_state] || 0) + 1; });
+  const cur = j.state === "NEEDS_HUMAN" ? j.resume_state : j.state;
+  const curIdx = j.state === "DONE" ? PIPE.length : PIPE.indexOf(cur);
+  const waiting = (j.last_error || "").startsWith("awaiting_external");
+  const track = PIPE.filter(s => s !== "DONE").map((s, i) => {
+    const cls = i < curIdx ? "done" : s === cur ? "cur" + (waiting ? " wait" : "") : "";
+    const n = visits[s] > 1 ? `<sup>×${visits[s]}</sup>` : "";
+    return `<span class="st ${cls}" title="${s}${visits[s] ? ` — chạy ${visits[s]} lần` : ""}">${s}${n}</span>`;
+  }).join("");
+  let now = "";
+  if (j.state === "DONE") now = `<span class="badge b-done">Xong</span> sau ${dur(j.created_at, j.updated_at)}`;
+  else if (waiting) {
+    const tid = j.last_error.split(":")[1];
+    const t = d.tasks.find(x => x.id === tid);
+    now = `Đang chờ extension: <b>${esc(t ? `${t.prompt_id} trên ${t.provider === "openai" ? "ChatGPT" : "Gemini"}` : tid)}</b>` +
+      (t ? ` — ${t.status === "claimed" ? "đang chạy trong tab" : "chưa có tab nhận"} (${dur(t.created_at)})` : "");
+  } else if (j.state === "NEEDS_HUMAN") now = `<span class="err">Dừng: ${esc(j.needs_human_reason)}</span>`;
+  else if (j.last_error) now = `<span class="badge b-warn">thử lại</span> ${esc(j.last_error.slice(0, 300))}`;
+  else if (j.current_call) {
+    const c = j.current_call, who = { anthropic: "Claude API", openai: "OpenAI API", gemini: "Gemini API" }[c.provider] || c.provider;
+    now = `Đang gọi <b>${esc(c.prompt_id)}</b> trên <b>${esc(who)}</b> (${esc(c.model)}${c.attempt ? `, repair ${c.attempt}` : ""}) — <span id="callclock" data-t="${esc(c.started_at)}">${dur(c.started_at)}</span>`;
+  } else if (j.leased_by) now = `Đang chạy <b>${esc(j.state)}</b> (code, không gọi model)`;
+  else now = `Chờ worker nhận <b>${esc(j.state)}</b>${j.run_after && new Date(j.run_after) > Date.now() ? ` — hẹn lúc ${time(j.run_after)}` : ""}`;
+
+  const autoN = d.transitions.filter(t => t.actor === "autopilot").length;
+  const rewinds = d.transitions.filter(t => t.outcome === "AUTO_REWIND" || t.outcome === "REVISE").length;
+  const nWarn = d.warnings?.items?.length || 0;
+  $("#detail").innerHTML = `
+    <div class="head">
+      <h2>${esc(j.topic)}</h2>
+      <div class="stat">Trạng thái<b>${stateBadge(j)}</b></div>
+      <div class="stat">Thời gian<b id="elapsed">${dur(j.created_at, j.state === "DONE" ? j.updated_at : null)}</b></div>
+      <div class="stat">Chi phí<b>${usd(j.cost_usd)} / ${usd(j.cost_cap_usd)}</b></div>
+      <div class="stat">Lượt gọi model<b>${d.runs.length} (${d.runs.filter(r => r.status === "invalid").length} sai)</b></div>
+      <div class="stat">Vòng sửa / quay lại<b>${rewinds}</b></div>
+      <div class="stat">Autopilot<b>${autoN}</b></div>
+      <div class="stat">Job<b class="small">${esc(j.id)}</b></div>
+    </div>
+    <div class="card"><div class="track">${track}</div><div class="nowline">${now}</div></div>
+    <div class="tabs">
+      ${[["steps", "Các bước"], ["timeline", `Timeline (${d.transitions.length})`], ["runs", `Prompt & output (${d.runs.length})`],
+         ["tasks", `Task extension (${d.tasks.length})`], ["warnings", `Cảnh báo (${nWarn})`],
+         ["article", "Bài viết"], ["artifacts", `Artifact (${d.artifacts.length})`]]
+        .map(([k, l]) => `<button data-tab="${k}" class="${detailTab === k ? "on" : ""}">${l}</button>`).join("")}
+    </div>
+    <div id="tab"></div>`;
+  $("#detail .tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { detailTab = b.dataset.tab; renderDetail(d); } });
+  ({ steps: tabSteps, timeline: tabTimeline, runs: tabRuns, tasks: tabTasks, warnings: tabWarnings, article: tabArticle, artifacts: tabArtifacts })[detailTab](d);
+}
+
+// ---------- tab "Các bước": từng bước làm gì, prompt đã gửi, kết quả nhận về, chỉnh ở đâu ----------
+const STEP_STATUS = { done: ["b-done", "xong"], running: ["b-run", "đang chạy"], stopped: ["b-bad", "dừng, chờ xử lý"], pending: ["", "chưa tới"] };
+const VIA = { external: "qua extension Chrome (không tốn tiền API)", proxy: "qua proxy web (không tốn tiền API)" };
+const short = v => { const s = typeof v === "string" ? v : JSON.stringify(v); return s == null ? "(chưa đặt)" : s.length > 260 ? s.slice(0, 260) + " …" : s; };
+
+async function tabSteps(d) {
+  const y = window.scrollY;
+  let data;
+  try { data = await api(`/ui/api/jobs/${d.job.id}/steps`); }
+  catch (e) { $("#tab").innerHTML = `<div class="card err">Không tải được danh sách bước: ${esc(e.message)}</div>`; return; }
+  if (detailTab !== "steps" || selected !== d.job.id || !$("#tab")) return;
+  if (stepsFor !== d.job.id) {
+    stepsFor = d.job.id; openSteps = new Set(); openRuns = {}; openArts = new Set();
+    const cur = data.steps.find(s => s.status === "running" || s.status === "stopped");
+    if (cur) openSteps.add(cur.state);
+  }
+  $("#tab").innerHTML = `<div class="small" style="margin-bottom:8px">Bấm vào từng bước để xem prompt đã gửi, kết quả AI trả về và chỗ chỉnh.
+      Sửa file prompt hoặc <code>config/config.yaml</code> xong thì khởi động lại server; job mới sẽ dùng bản đã sửa.</div>` +
+    data.steps.map((s, i) => stepHtml(s, i)).join("");
+  for (const id of Object.keys(openRuns)) fillRun(id);
+  for (const id of openArts) fillArt(id);
+  window.scrollTo(0, y);
+  const tab = $("#tab");
+  tab.querySelectorAll("details.step").forEach(el => el.addEventListener("toggle", () => {
+    el.open ? openSteps.add(el.dataset.step) : openSteps.delete(el.dataset.step);
+  }));
+  tab.onclick = e => {
+    const rb = e.target.closest("button[data-run]"), ab = e.target.closest("button[data-art]"), cp = e.target.closest("button[data-copy]");
+    if (rb) {
+      const id = rb.dataset.run, v = rb.dataset.v;
+      if (openRuns[id] === v) delete openRuns[id]; else openRuns[id] = v;
+      fillRun(id);
+    } else if (ab) {
+      const id = ab.dataset.art;
+      openArts.has(id) ? openArts.delete(id) : openArts.add(id);
+      fillArt(id);
+    } else if (cp) navigator.clipboard?.writeText(cp.parentElement.nextElementSibling.textContent);
+  };
+}
+
+function stepHtml(s, i) {
+  const [cls, label] = STEP_STATUS[s.status];
+  const bad = s.runs.filter(r => r.status !== "ok").length;
+  const oc = s.last ? `<span class="badge ${["ERROR", "ESCALATE", "FAIL"].includes(s.last.outcome) ? "b-bad" : s.last.outcome === "REVISE" || s.last.outcome.startsWith("AUTO") ? "b-warn" : ""}">${esc(s.last.outcome)}</span>` : "";
+  const runs = s.runs.map(r => `<div class="runrow">
+      <b>${esc(r.prompt_id)}</b> <span class="small">v${esc(r.prompt_version || "?")}</span>
+      <span class="badge ${r.status === "ok" ? "b-done" : "b-bad"}">${esc(r.status)}</span>
+      <span class="small">${esc(r.provider)} · ${esc(r.model || "")}${r.round ? ` · vòng ${r.round}` : ""}${r.repair_attempt ? ` · sửa lần ${r.repair_attempt}` : ""}${r.latency_ms ? ` · ${Math.round(r.latency_ms / 1000)}s` : ""}${Number(r.cost_usd) ? ` · ${usd(r.cost_usd)}` : ""} · ${time(r.created_at)}</span>
+      <span class="spacer"></span>
+      <button data-run="${r.id}" data-v="prompt">Prompt</button>
+      <button data-run="${r.id}" data-v="output">Kết quả</button>
+      ${r.n_errors ? `<button data-run="${r.id}" data-v="errors">Lỗi (${r.n_errors})</button>` : ""}
+    </div><div class="pane" id="rp-${r.id}"></div>`).join("");
+  const arts = s.artifacts.map(a => `<button class="artbtn" data-art="${a.id}" title="${time(a.created_at)}">${esc(a.kind)} v${a.version}</button>`).join(" ");
+  const hist = s.history.length > 1 ? `<div class="small" style="margin-top:4px">Bước này đã chạy ${s.history.length} lần: ${s.history.map(h => `${time(h.at)} ${esc(h.outcome)} → ${esc(h.to_state)}`).join(" · ")}</div>` : "";
+  const e = s.edit;
+  const prompts = e.prompts.map(p => `<li>Prompt <b>${esc(p.prompt_id)}</b>: sửa lời dặn AI ở <code>${esc(p.file)}</code> (bản ${esc(p.version)}${p.extends ? `, kế thừa <code>prompts/${esc(p.extends)}.yaml</code>` : ""}).
+      Đổi model ở <code>config/config.yaml</code> → <code>${esc(p.model_key)}</code>, đang là <code>${esc(Object.values(p.model).join(" / ") || "(chưa đặt)")}</code>${VIA[p.provider_mode] ? ` — ${VIA[p.provider_mode]}` : ""}.
+      ${p.validators.length ? `<br><span class="small">Code tự kiểm tra kết quả: ${p.validators.map(esc).join(", ")}</span>` : ""}</li>`).join("");
+  const conf = e.config.map(c => `<li><code>${esc(c.key)}</code> = <code>${esc(short(c.value))}</code></li>`).join("");
+  return `<details class="step s-${s.status}" data-step="${esc(s.state)}" ${openSteps.has(s.state) ? "open" : ""}>
+    <summary><span class="n">${i + 1}.</span> <b>${esc(s.title)}</b> <code>${esc(s.state)}</code>
+      <span class="badge ${cls}">${label}</span> ${oc}
+      ${s.visits > 1 ? `<span class="badge b-warn">chạy ${s.visits} lần</span>` : ""}
+      <span class="spacer"></span>
+      <span class="small">${s.runs.length ? `${s.runs.length} lượt gọi AI${bad ? ` (${bad} hỏng)` : ""}` : "không gọi AI"}${s.cost_usd ? ` · ${usd(s.cost_usd)}` : ""}</span></summary>
+    <div class="stepbody">
+      <div>${esc(s.what)}</div>
+      ${s.last ? `<div><h4>Kết quả bước</h4>${oc} chuyển sang <b>${esc(s.last.to_state)}</b> <span class="small">(${esc(s.last.actor.split(":")[0])}, ${time(s.last.at)})</span>
+        ${s.last.reason ? `<div class="why" style="white-space:pre-wrap;margin-top:4px">${esc(s.last.reason)}</div>` : ""}${hist}</div>` : ""}
+      ${s.runs.length ? `<div><h4>Prompt đã gửi và kết quả AI trả về</h4>${runs}</div>` : ""}
+      ${arts ? `<div><h4>Dữ liệu bước này tạo ra</h4>${arts}${s.artifacts.map(a => `<div class="pane" id="ap-${a.id}"></div>`).join("")}</div>` : ""}
+      <div class="editbox"><h4>Chỉnh ở đâu</h4><ul>
+        ${prompts}
+        ${conf ? `<li>Thông số trong <code>config/config.yaml</code>:<ul>${conf}</ul></li>` : ""}
+        ${e.code ? `<li>Logic của bước (lập trình viên): <code>${esc(e.code)}</code></li>` : ""}
+      </ul></div>
+    </div></details>`;
+}
+
+const paneHtml = (title, text, isErr) => `<div class="subtabs"><span class="small">${esc(title)}</span><button class="copy" data-copy>Copy</button></div><pre class="${isErr ? "err" : ""}">${esc(text)}</pre>`;
+
+async function fillRun(id) {
+  const view = openRuns[id];
+  document.querySelectorAll(`#tab button[data-run="${id}"]`).forEach(b => b.classList.toggle("on", b.dataset.v === view));
+  const pane = document.getElementById(`rp-${id}`);
+  if (!pane) return;
+  if (!view) { pane.innerHTML = ""; return; }
+  if (!runCache[id]) {
+    pane.innerHTML = `<div class="small">Đang tải…</div>`;
+    try { runCache[id] = await api(`/ui/api/runs/${id}`); } catch (e) { pane.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+    if (openRuns[id] !== view || !pane.isConnected) return;
+  }
+  const r = runCache[id];
+  let text = view === "errors" ? (r.errors || []).join("\n") : view === "prompt" ? (r.prompt ?? "(lượt cũ: chưa lưu prompt)") : (r.output ?? "(trống)");
+  if (view === "output") { try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {} }
+  pane.innerHTML = paneHtml({ prompt: "Prompt đã gửi cho AI", output: "Kết quả AI trả về", errors: "Lỗi do code kiểm tra phát hiện" }[view] + ` — ${r.prompt_id}`, text, view === "errors");
+}
+
+async function fillArt(id) {
+  const on = openArts.has(id);
+  document.querySelectorAll(`#tab button[data-art="${id}"]`).forEach(b => b.classList.toggle("on", on));
+  const pane = document.getElementById(`ap-${id}`);
+  if (!pane) return;
+  if (!on) { pane.innerHTML = ""; return; }
+  if (!articleCache[id]) {
+    pane.innerHTML = `<div class="small">Đang tải…</div>`;
+    try { articleCache[id] = await api(`/ui/api/artifacts/${id}`); } catch (e) { pane.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+    if (!openArts.has(id) || !pane.isConnected) return;
+  }
+  const a = articleCache[id];
+  pane.innerHTML = paneHtml(`${a.kind} v${a.version}`, typeof a.payload === "string" ? a.payload : JSON.stringify(a.payload, null, 2));
+}
+
+function tabTimeline(d) {
+  const rows = d.transitions.slice().reverse().map(t => {
+    const cls = t.actor === "autopilot" ? "autopilot" : (t.outcome === "REVISE" || t.outcome === "AUTO_REWIND") ? "rewind" : "";
+    const oc = t.outcome.startsWith("AUTO") ? "b-auto" : t.outcome === "REVISE" ? "b-warn" : ["ERROR", "ESCALATE", "FAIL"].includes(t.outcome) ? "b-bad" : "";
+    return `<tr class="${cls}"><td class="r">${time(t.created_at)}</td><td class="r">${esc(t.from_state)} → <b>${esc(t.to_state)}</b></td>
+      <td><span class="badge ${oc}">${esc(t.outcome)}</span></td><td class="r small">${esc(t.actor.split(":")[0])}</td><td class="why">${esc(t.reason || "")}</td></tr>`;
+  }).join("");
+  $("#tab").innerHTML = `<div class="card"><table><thead><tr><th>Giờ</th><th>Bước</th><th>Kết quả</th><th>Ai</th><th>Lý do</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function tabRuns(d) {
+  let lastStep = null;
+  const rows = d.runs.map((r, i) => {
+    const head = r.step !== lastStep ? `<tr class="steph"><td colspan="5">${esc(r.step)}</td></tr>` : "";
+    lastStep = r.step;
+    const st = r.status === "ok" ? "b-done" : "b-bad";
+    return head + `<tr class="clickable ${pickedRun === r.id ? "picked" : ""}" data-run="${r.id}">
+      <td class="r">${i + 1}. <b>${esc(r.prompt_id)}</b></td>
+      <td class="r small">${r.round ? `vòng ${r.round} · ` : ""}${r.repair_attempt ? `repair ${r.repair_attempt}` : "lượt đầu"}</td>
+      <td><span class="badge ${st}">${esc(r.status)}</span></td>
+      <td class="r small">${esc(r.provider)}${r.latency_ms ? ` · ${Math.round(r.latency_ms / 1000)}s` : ""}</td>
+      <td class="r small">${r.cost_usd ? usd(r.cost_usd) : ""}</td></tr>`;
+  }).join("");
+  $("#tab").innerHTML = `<div class="split">
+    <div class="card runlist"><table><tbody>${rows || `<tr><td class="small">Chưa có lượt gọi model</td></tr>`}</tbody></table></div>
+    <div class="card" id="runpanel"><div class="small">Chọn một lượt để xem prompt và output</div></div></div>`;
+  $("#tab .runlist").addEventListener("click", e => { const tr = e.target.closest("tr[data-run]"); if (tr) { pickedRun = tr.dataset.run; tabRuns(d); } });
+  if (pickedRun) showRun(pickedRun);
+}
+
+async function showRun(id) {
+  const r = await api(`/ui/api/runs/${id}`);
+  const panel = $("#runpanel");
+  if (!panel) return;
+  const views = [["output", "Output"], ["prompt", "Prompt"]].concat(r.errors?.length ? [["errors", `Lỗi validator (${r.errors.length})`]] : []);
+  if (!views.find(v => v[0] === runView)) runView = "output";
+  const body = runView === "errors" ? r.errors.join("\n") : runView === "prompt" ? (r.prompt ?? "(lượt cũ: chưa lưu prompt)") : (r.output ?? "(trống)");
+  let shown = body;
+  if (runView === "output") { try { shown = JSON.stringify(JSON.parse(body), null, 2); } catch (e) {} }
+  panel.innerHTML = `<div class="subtabs"><b>${esc(r.step)} · ${esc(r.prompt_id)}</b>
+      ${views.map(([k, l]) => `<button data-v="${k}" class="${runView === k ? "on" : ""}">${l}</button>`).join("")}
+      <button class="copy" id="copybtn">Copy</button></div>
+    <pre class="${runView === "errors" ? "err" : ""}">${esc(shown)}</pre>`;
+  panel.querySelector(".subtabs").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]"); if (b) { runView = b.dataset.v; showRun(id); }
+  });
+  $("#copybtn").onclick = () => navigator.clipboard?.writeText(shown);
+}
+
+function tabTasks(d) {
+  const rows = d.tasks.slice().reverse().map(t => {
+    const cls = { done: "b-done", failed: "b-bad", claimed: "b-run", pending: "b-wait", cancelled: "" }[t.status] || "";
+    return `<tr><td class="r">${time(t.created_at)}</td><td class="r">${esc(t.step)}</td><td><b>${esc(t.prompt_id)}</b></td>
+      <td>${t.provider === "openai" ? "ChatGPT" : "Gemini"}</td><td><span class="badge ${cls}">${esc(t.status)}</span></td>
+      <td class="r">${dur(t.created_at, t.completed_at)}</td><td class="why err">${esc(t.error || "")}${t.failures ? ` (lỗi ${t.failures} lần)` : ""}</td></tr>`;
+  }).join("");
+  $("#tab").innerHTML = `<div class="card"><table><thead><tr><th>Tạo</th><th>Bước</th><th>Prompt</th><th>Web</th><th>Trạng thái</th><th>Thời gian</th><th>Lỗi</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="small">Không có task web</td></tr>`}</tbody></table></div>`;
+}
+
+function tabWarnings(d) {
+  const items = d.warnings?.items || [];
+  $("#tab").innerHTML = items.length ? `<div class="card">${items.map(w => `<div class="warn-item ${w.ai_action?.startsWith("autopilot") ? "auto" : ""}">
+    <div><span class="badge">${esc(w.gate)}</span> <span class="badge ${w.ai_action?.startsWith("autopilot") ? "b-auto" : "b-warn"}">${esc(w.ai_action)}</span> <span class="small">${esc(w.state)}</span></div>
+    <div style="margin-top:4px;white-space:pre-wrap">${esc(w.reason)}</div></div>`).join("")}</div>`
+    : `<div class="card small">Không có cảnh báo</div>`;
+}
+
+async function tabArticle(d) {
+  const pick = d.artifacts.find(a => a.kind === "FinalPackage") || d.artifacts.find(a => a.kind === "ArticleDraft");
+  if (!pick) { $("#tab").innerHTML = `<div class="card small">Chưa có bài (bài được viết ở bước WRITE)</div>`; return; }
+  const key = pick.id;
+  const a = articleCache[key] || (articleCache[key] = await api(`/ui/api/artifacts/${pick.id}`));
+  const p = a.payload;
+  const md = p.article_markdown || p.body_markdown || "";
+  const words = md.split(/\s+/).filter(Boolean).length;
+  const html = window.marked && window.DOMPurify ? DOMPurify.sanitize(marked.parse(md.replace(/<!--[\s\S]*?-->/g, ""))) : `<pre>${esc(md)}</pre>`;
+  $("#tab").innerHTML = `<div class="card">
+    <div class="meta">${pick.kind === "FinalPackage" && p.title ? `<b>Title:</b> ${esc(p.title)}<br><b>Meta:</b> ${esc(p.meta)}<br><b>Slug:</b> ${esc(p.slug)}<br>` : pick.kind === "FinalPackage" ? `<b>Bài đã viết lại</b> · ` : `<b>Bản nháp</b> (chưa qua kiểm tra) · `}
+      <button class="ghost" id="copyart" style="padding:2px 8px;font-size:12px">Copy bài</button> 
+      <span class="small">${words} chữ · ${pick.kind} v${pick.version} · ${time(pick.created_at)}</span></div>
+    <div class="article">${html}</div></div>`;
+  $("#copyart").onclick = () => navigator.clipboard?.writeText(md.replace(/<!--[\s\S]*?-->\n?/g, ""));
+}
+
+function tabArtifacts(d) {
+  const rows = d.artifacts.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(a =>
+    `<tr class="clickable" data-a="${a.id}"><td><b>${esc(a.kind)}</b></td><td>v${a.version}</td><td class="small">${esc(a.produced_by)}</td><td class="r">${time(a.created_at)}</td></tr>`).join("");
+  $("#tab").innerHTML = `<div class="split"><div class="card runlist"><table><tbody>${rows}</tbody></table></div>
+    <div class="card" id="apanel"><div class="small">Chọn artifact để xem JSON</div></div></div>`;
+  $("#tab .runlist").addEventListener("click", async e => {
+    const tr = e.target.closest("tr[data-a]"); if (!tr) return;
+    document.querySelectorAll("#tab tr[data-a]").forEach(x => x.classList.toggle("picked", x === tr));
+    const a = await api(`/ui/api/artifacts/${tr.dataset.a}`);
+    $("#apanel").innerHTML = `<div class="subtabs"><b>${esc(a.kind)} v${a.version}</b></div><pre>${esc(JSON.stringify(a.payload, null, 2))}</pre>`;
+  });
+}
+
+let failures = 0;
+async function tick() {
+  try {
+    await refreshOverview();
+    if (detailTab !== "runs" || !pickedRun) await refreshDetail(false); // đang đọc prompt thì không vẽ lại
+    else if (lastDetail) updateClock(lastDetail.d);
+    failures = 0;
+    $("#pulse").classList.remove("stale");
+    $("#updated").textContent = "cập nhật " + time(new Date());
+  } catch (e) {
+    failures++;
+    $("#pulse").classList.add("stale");
+    $("#updated").textContent = "lỗi kết nối: " + e.message.slice(0, 120);
+  }
+}
+// ---------- tạo job ----------
+let branch = "B", kwB64 = null;
+const dlg = $("#dlg"), form = $("#jobform");
+function setBranch(b) {
+  branch = b;
+  document.querySelectorAll("#branchseg button").forEach(x => x.classList.toggle("on", x.dataset.b === b));
+  form.querySelector(".only-a").hidden = b !== "A";
+  form.querySelector(".only-b").hidden = b !== "B";
+  $("#topiclabel").textContent = b === "A" ? "Tên job (tuỳ chọn)" : "Chủ đề *";
+  $("#kwlabel").textContent = b === "A" ? "Keyword cần giữ trong bài (tuỳ chọn)" : "Keyword *";
+  form.querySelectorAll(".only-full").forEach(x => x.hidden = b === "A" && $("#flowsel").value === "rework");
+  $("#topichint").hidden = b !== "A";
+}
+$("#flowsel").onchange = () => setBranch(branch);
+$("#branchseg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setBranch(b.dataset.b); });
+// Tác giả lấy từ bảng authors: tên/URL đưa vào bài (JSON-LD), hồ sơ giọng văn và kho dữ liệu đi theo tác giả
+// Site: kho dữ liệu, trang nội bộ và tác giả mặc định đi theo site; tác giả của site khác không hiện trong ô Tác giả
+let siteList = [];
+async function loadSites(selectId) {
+  const sel = $("#sitesel");
+  try { siteList = (await api("/ui/api/sites")).sites; } catch (e) { siteList = []; }
+  sel.innerHTML = `<option value="">(không gắn site)</option>` + siteList.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${esc(s.id)}</option>`).join("");
+  if (selectId) sel.value = selectId;
+  const show = () => {
+    const s = siteList.find(x => x.id === sel.value);
+    $("#sitehint").textContent = !s ? "Bài không dùng kho dữ liệu và trang nội bộ của site nào."
+      : `${s.knowledge_entries} mục kho của site · ${s.internal_pages} trang nội bộ · ${s.authors} tác giả riêng`;
+    loadAuthors(s ? s.default_author_id : null);
+  };
+  sel.onchange = show; show();
+}
+$("#addsite").onclick = async e => {
+  e.preventDefault();
+  const url = (prompt("Địa chỉ site (vd. https://ten-site.vn):") || "").trim();
+  if (!url) return;
+  const name = (prompt("Tên thương hiệu của site:") || "").trim();
+  if (!name) return;
+  const r = await fetch("/ui/api/sites", { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { "X-UI-Token": token() } : {}) }, body: JSON.stringify({ name, url }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $("#sitehint").innerHTML = `<span class="err">${esc(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j)).slice(0, 300)}</span>`; return; }
+  await loadSites(j.id);
+};
+async function loadAuthors(selectId) {
+  const sel = $("#authorsel");
+  let list = [];
+  try { list = (await api("/ui/api/authors")).authors; } catch (e) {}
+  const site = $("#sitesel").value || null;
+  list = list.filter(a => !a.site_id || a.site_id === site);
+  sel.innerHTML = list.map(a => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")
+    || `<option value="tac-gia-01">(chưa có tác giả — bấm “+ thêm”)</option>`;
+  if (selectId) sel.value = selectId;
+  const show = () => {
+    const a = list.find(x => x.id === sel.value);
+    $("#authorhint").textContent = !a ? "Bài sẽ không có tên tác giả và không có giọng văn riêng."
+      : `${!a.has_voice ? "Chưa có giọng văn (sẽ tự học từ các trang tìm được, nhánh B)"
+           : a.voice_origin === "author" ? "Giọng văn: từ bài của tác giả"
+           : `Giọng văn: tự học ${a.voice_learned_jobs} job`} · ${a.knowledge_entries} mục kho dữ liệu`;
+  };
+  sel.onchange = show; show();
+}
+$("#addauthor").onclick = async e => {
+  e.preventDefault();
+  const name = (prompt("Tên tác giả hiển thị trong bài (người hoặc tổ chức thật):") || "").trim();
+  if (!name) return;
+  const url = (prompt("URL trang tác giả / trang giới thiệu (có thể bỏ trống):") || "").trim();
+  const kind = confirm("Tác giả này là TỔ CHỨC (ban biên tập, thương hiệu)?\nOK = tổ chức · Cancel = một người") ? "organization" : "person";
+  const r = await fetch("/ui/api/authors", { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { "X-UI-Token": token() } : {}) }, body: JSON.stringify({ name, url: url || null, kind, site_id: $("#sitesel").value || null }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $("#authorhint").innerHTML = `<span class="err">${esc(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j)).slice(0, 300)}</span>`; return; }
+  await loadAuthors(j.id);
+};
+$("#newjob").onclick = () => { $("#formmsg").textContent = ""; loadSites($("#sitesel").value); dlg.showModal(); };
+$("#dlg-x").onclick = $("#dlg-cancel").onclick = () => dlg.close();
+$("#fetchart").onclick = async () => {
+  const url = form.article_url.value.trim();
+  if (!url) { $("#fetchhint").innerHTML = `<span class="err">Nhập link trước</span>`; return; }
+  $("#fetchart").disabled = true; $("#fetchhint").textContent = "Đang tải bài…";
+  try {
+    const r = await fetch("/ui/api/fetch-article", { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { "X-UI-Token": token() } : {}) }, body: JSON.stringify({ url }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j));
+    form.article_md.value = j.article_md;
+    if (j.title && !form.topic.value.trim()) form.topic.value = j.title;
+    $("#fetchhint").textContent = `Đã lấy ${j.words} chữ${j.title ? ` — tiêu đề: ${j.title}` : ""}. Kiểm tra/sửa ở ô nội dung bên dưới.`;
+  } catch (err) {
+    $("#fetchhint").innerHTML = `<span class="err">${esc(err.message).slice(0, 300)}</span>`;
+  } finally { $("#fetchart").disabled = false; }
+};
+$("#articlefile").onchange = async e => { const f = e.target.files[0]; if (f) form.article_md.value = await f.text(); };
+$("#kwfile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) { kwB64 = null; return; }
+  const buf = new Uint8Array(await f.arrayBuffer());
+  let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  kwB64 = btoa(bin);
+  $("#kwhint").textContent = `Đã chọn ${f.name} (${Math.round(f.size / 1024)} KB) — server đọc và lấy tối đa 100 keyword volume cao nhất.`;
+};
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  if (branch === "B" && !String(fd.get("topic") || "").trim()) { $("#formmsg").innerHTML = `<span class="err">Nhánh B cần chủ đề</span>`; return; }
+  const body = {
+    branch, topic: fd.get("topic"), brief: fd.get("brief") || "", mode: fd.get("mode"), ymyl: fd.get("ymyl") === "true",
+    target_words: Number(fd.get("target_words") || 1500), keywords_text: fd.get("keywords_text") || "", keywords_b64: kwB64,
+    paa_text: fd.get("paa_text") || "", author_id: fd.get("author_id") || "tac-gia-01", site_id: fd.get("site_id") || null,
+    ...(branch === "A" ? { article_md: fd.get("article_md"), article_url: fd.get("article_url") || null, auto_source: 0, flow: fd.get("flow") }
+                       : { auto_source: Number(fd.get("auto_source") || 0), serp_query: fd.get("serp_query") || null }),
+  };
+  $("#dlg-ok").disabled = true;
+  $("#formmsg").textContent = branch === "B" && body.auto_source ? "Đang lấy SERP và tải tư liệu (30–90 giây)…" : "Đang tạo…";
+  try {
+    const r = await fetch("/ui/api/jobs", { method: "POST", headers: { "Content-Type": "application/json", ...(token() ? { "X-UI-Token": token() } : {}) }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail || j));
+    dlg.close(); form.reset(); kwB64 = null; setBranch("B");
+    await refreshOverview(); select(j.id);
+  } catch (err) {
+    $("#formmsg").innerHTML = `<span class="err">${esc(err.message).slice(0, 300)}</span>`;
+  } finally { $("#dlg-ok").disabled = false; }
+});
+
+// Realtime: server đẩy sự kiện (SSE) khi job/task đổi → tải lại sau 300ms (gộp các sự kiện dồn dập).
+// Không có SSE (server cũ / DB chưa có trigger) thì quay về hỏi định kỳ 5s.
+let live = false, pending = null;
+function soon() { clearTimeout(pending); pending = setTimeout(tick, 300); }
+function connectStream() {
+  if (!window.EventSource) return;
+  const es = new EventSource("/ui/api/stream" + (token() ? `?token=${encodeURIComponent(token())}` : ""));
+  es.onopen = () => { live = true; $("#mode").textContent = "realtime"; };
+  // Job nào đổi cũng tải lại: danh sách job bên trái cũng cần cập nhật
+  es.onmessage = () => soon();
+  es.addEventListener("nolisten", () => { es.close(); live = false; $("#mode").textContent = "5s"; });
+  es.onerror = () => { live = false; $("#mode").textContent = "5s (mất realtime, đang nối lại)"; };
+}
+tick();
+connectStream();
+setInterval(() => { if (!live) tick(); else if (lastDetail) updateClock(lastDetail.d); }, 5000);
+setInterval(() => { if (live) tick(); }, 30000); // phòng khi lỡ sự kiện
+</script>
+</body>
+</html>
